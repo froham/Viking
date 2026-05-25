@@ -906,7 +906,10 @@ async function globalTick() {
       trigEvent();
       S.nextEventIn = 2 + Math.floor(Math.random() * 4);
     }
-
+    // Sjekk om raid ankommer
+    if (S.raidInFlight && S.tick >= S.raidInFlight.arriveTick) {
+    resolveRaid();
+  }
     updAll();
     updRagna();
     tk(`🌍 Global tick ${S.tick} — ${bygnOppdateringar.length} bygningar ferdigstilt`, 3500);
