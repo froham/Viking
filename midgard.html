@@ -1,0 +1,1997 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Midgard</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root {
+  --ink: #1a1208;
+  --parchment: #f2e8d0;
+  --parchment-dark: #e0d0a8;
+  --parchment-deeper: #c8b882;
+  --blood: #8b1a1a;
+  --blood-light: #b22222;
+  --gold: #c8900a;
+  --gold-light: #e8b020;
+  --rune-blue: #2a4a6b;
+  --forest: #2d4a1e;
+  --stone: #5a5040;
+  --stone-light: #8a7a60;
+  --border-rune: #8a6a20;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: #0d0a06;
+  color: var(--ink);
+  font-family: 'Crimson Text', Georgia, serif;
+  font-size: 16px;
+  line-height: 1.5;
+  min-height: 100vh;
+}
+#app {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  grid-template-columns: 270px 1fr 270px;
+  grid-template-areas: "header header header" "left main right" "footer footer footer";
+  min-height: 100vh;
+  max-width: 1440px;
+  margin: 0 auto;
+}
+/* HEADER */
+#header {
+  grid-area: header;
+  background: var(--ink);
+  border-bottom: 3px solid var(--gold);
+  padding: 10px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.logo { font-family:'Cinzel',serif; font-size:26px; font-weight:700; color:var(--gold-light); letter-spacing:5px; text-shadow:0 0 20px rgba(200,144,10,0.4); }
+.logo span { color:var(--blood-light); }
+.header-resources { display:flex; gap:10px; flex-wrap:wrap; }
+.res-chip { display:flex; align-items:center; gap:5px; background:rgba(242,232,208,0.08); border:1px solid rgba(200,144,10,0.3); border-radius:3px; padding:4px 10px; font-family:'Cinzel',serif; font-size:12px; color:var(--parchment); }
+.res-chip .val { color:var(--gold-light); font-weight:600; }
+.res-chip .delta { font-size:10px; color:#6a8; margin-left:2px; }
+.res-chip .delta.neg { color:#c66; }
+.jarl-name-header { font-family:'Cinzel',serif; font-size:13px; color:var(--stone-light); }
+.jarl-name-header span { color:var(--gold-light); }
+
+/* PANELS */
+.panel { background:var(--parchment); border:1px solid var(--border-rune); overflow:hidden; }
+.panel-title { font-family:'Cinzel',serif; font-size:10px; font-weight:600; letter-spacing:3px; text-transform:uppercase; color:var(--stone); padding:8px 14px; border-bottom:1px solid var(--parchment-deeper); background:var(--parchment-dark); display:flex; justify-content:space-between; align-items:center; }
+
+/* LEFT */
+#left { grid-area:left; border-right:2px solid var(--border-rune); display:flex; flex-direction:column; overflow-y:auto; }
+#city-svg-wrap { padding:10px; flex-shrink:0; }
+#city-svg-wrap svg { width:100%; }
+
+/* RESSURSRAD */
+.res-rows { padding:4px 12px 8px; }
+.res-row { display:flex; justify-content:space-between; align-items:center; padding:4px 0; border-bottom:1px solid rgba(138,106,32,0.12); font-size:13px; }
+.res-row:last-child { border-bottom:none; }
+.res-label { color:var(--stone); }
+.res-val { font-family:'Cinzel',serif; font-size:12px; font-weight:600; }
+.res-d { font-size:11px; color:#4a7a3a; }
+.res-d.neg { color:var(--blood); }
+
+/* TABS */
+.tabs { display:flex; border-bottom:1px solid var(--border-rune); background:var(--parchment-dark); }
+.tab { flex:1; text-align:center; padding:7px 4px; font-family:'Cinzel',serif; font-size:10px; letter-spacing:1px; cursor:pointer; border-right:1px solid rgba(138,106,32,0.3); color:var(--stone); transition:all 0.15s; position:relative; }
+.tab:last-child { border-right:none; }
+.tab.active { background:var(--parchment); color:var(--ink); font-weight:600; }
+.tab .badge { position:absolute; top:3px; right:4px; background:var(--blood); color:var(--parchment); font-size:9px; padding:1px 4px; border-radius:8px; font-family:sans-serif; }
+
+/* TAB CONTENT */
+.tab-panel { display:none; padding:8px 10px; }
+.tab-panel.active { display:block; }
+
+/* REKRUTTER/BYGG LISTE */
+.action-item {
+  display:flex; align-items:center; gap:8px; padding:7px 8px; margin-bottom:5px;
+  border:1px solid var(--parchment-deeper); border-radius:2px; background:rgba(255,255,255,0.3);
+  cursor:pointer; transition:background 0.15s; font-size:13px;
+}
+.action-item:hover:not(.locked):not(.built) { background:rgba(200,144,10,0.1); }
+.action-item.built { background:rgba(45,74,30,0.08); border-color:#4a7a3a; }
+.action-item.locked { opacity:0.4; cursor:not-allowed; }
+.action-item.in-progress { border-color:var(--gold); background:rgba(200,144,10,0.07); }
+.action-icon { font-size:18px; flex-shrink:0; }
+.action-body { flex:1; }
+.action-name { font-family:'Cinzel',serif; font-size:11px; font-weight:600; }
+.action-desc { font-size:11px; color:var(--stone); margin-top:1px; }
+.action-right { text-align:right; font-size:11px; color:var(--stone); flex-shrink:0; }
+.action-right .cost { color:var(--blood); }
+.action-right .ready { color:var(--forest); font-weight:600; }
+.action-right .progress { color:var(--gold); }
+
+/* MAIN */
+#main { grid-area:main; display:flex; flex-direction:column; overflow:hidden; }
+
+/* SKJALD */
+#skjald-panel { border-bottom:2px solid var(--border-rune); background:var(--parchment); flex-shrink:0; }
+.skjald-inner { display:flex; gap:0; }
+.skjald-portrait { width:110px; flex-shrink:0; background:var(--ink); display:flex; align-items:center; justify-content:center; border-right:2px solid var(--border-rune); }
+.skjald-portrait svg { width:100%; }
+.skjald-text { padding:12px 16px; flex:1; }
+.skjald-label { font-family:'Cinzel',serif; font-size:9px; letter-spacing:3px; color:var(--stone); margin-bottom:5px; text-transform:uppercase; }
+.skjald-speech { font-style:italic; font-size:15px; color:var(--ink); line-height:1.6; }
+
+/* HENDELSER+KAMP */
+#main-tabs-wrap { flex:1; overflow:hidden; display:flex; flex-direction:column; }
+#main-content { flex:1; overflow-y:auto; padding:10px 12px; }
+
+/* HENDELSESKORT */
+.event-card { display:flex; gap:10px; padding:10px 12px; margin-bottom:8px; border:1px solid var(--parchment-deeper); border-radius:2px; background:rgba(255,255,255,0.4); animation:slideIn 0.3s ease-out; }
+@keyframes slideIn { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:none} }
+.event-card.urgent { border-color:var(--blood); background:rgba(139,26,26,0.05); }
+.event-card.divine { border-color:var(--gold); background:rgba(200,144,10,0.05); }
+.event-card.trade  { border-color:var(--forest); background:rgba(45,74,30,0.05); }
+.event-card.resolved { opacity:0.45; pointer-events:none; }
+.ev-icon { font-size:20px; flex-shrink:0; margin-top:2px; }
+.ev-body { flex:1; }
+.ev-title { font-family:'Cinzel',serif; font-size:12px; font-weight:600; margin-bottom:3px; }
+.ev-desc { font-size:13px; color:var(--stone); line-height:1.5; }
+.ev-actions { display:flex; gap:6px; margin-top:7px; flex-wrap:wrap; }
+.ev-time { font-size:11px; color:var(--stone-light); margin-top:3px; font-style:italic; }
+
+/* KAMPPANEL */
+.combat-section { margin-bottom:14px; }
+.combat-section h3 { font-family:'Cinzel',serif; font-size:11px; letter-spacing:2px; color:var(--stone); text-transform:uppercase; margin-bottom:6px; padding-bottom:4px; border-bottom:1px solid var(--parchment-deeper); }
+.jarl-card { display:flex; align-items:center; gap:10px; padding:8px 10px; margin-bottom:6px; border:1px solid var(--parchment-deeper); border-radius:2px; background:rgba(255,255,255,0.35); font-size:13px; }
+.jarl-card.enemy { border-color:rgba(139,26,26,0.3); background:rgba(139,26,26,0.04); }
+.jarl-card.ally  { border-color:rgba(45,74,30,0.3); background:rgba(45,74,30,0.04); }
+.jarl-avatar { font-size:22px; }
+.jarl-info { flex:1; }
+.jarl-n { font-family:'Cinzel',serif; font-size:12px; font-weight:600; }
+.jarl-stats { font-size:11px; color:var(--stone); margin-top:2px; }
+.jarl-actions { display:flex; gap:5px; flex-direction:column; }
+
+/* BUTTONS */
+.btn { font-family:'Cinzel',serif; font-size:10px; letter-spacing:1px; padding:5px 11px; border:1px solid; cursor:pointer; transition:all 0.15s; border-radius:2px; text-transform:uppercase; white-space:nowrap; }
+.btn-primary   { background:var(--ink); color:var(--gold-light); border-color:var(--gold); }
+.btn-primary:hover   { background:var(--blood); }
+.btn-secondary { background:transparent; color:var(--stone); border-color:var(--stone-light); }
+.btn-secondary:hover { background:var(--parchment-dark); color:var(--ink); }
+.btn-danger    { background:transparent; color:var(--blood); border-color:var(--blood); }
+.btn-danger:hover    { background:var(--blood); color:var(--parchment); }
+.btn-success   { background:transparent; color:var(--forest); border-color:var(--forest); }
+.btn-success:hover   { background:var(--forest); color:var(--parchment); }
+.btn:disabled  { opacity:0.4; cursor:not-allowed; }
+
+/* RIGHT */
+#right { grid-area:right; border-left:2px solid var(--border-rune); display:flex; flex-direction:column; overflow-y:auto; }
+#map-wrap { padding:10px; flex-shrink:0; }
+#map-wrap svg { width:100%; }
+.ragnarok-wrap { padding:6px 14px 10px; }
+.ragna-label { font-family:'Cinzel',serif; font-size:9px; letter-spacing:2px; color:var(--blood); text-transform:uppercase; margin-bottom:4px; display:flex; justify-content:space-between; }
+.ragna-track { height:7px; background:rgba(139,26,26,0.15); border:1px solid rgba(139,26,26,0.3); border-radius:1px; overflow:hidden; }
+.ragna-fill  { height:100%; background:linear-gradient(90deg,var(--blood),#cc0000); border-radius:1px; transition:width 0.6s ease; }
+
+/* KAMP-LOGG */
+.combat-log { padding:4px 14px 10px; }
+.log-entry { font-size:12px; color:var(--stone); padding:3px 0; border-bottom:1px solid rgba(138,106,32,0.1); font-style:italic; }
+.log-entry.win  { color:var(--forest); }
+.log-entry.loss { color:var(--blood); }
+.log-entry.info { color:var(--rune-blue); }
+
+/* FOOTER DEV */
+#footer { grid-area:footer; background:#0d0a06; border-top:2px solid var(--blood); padding:8px 16px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+.dev-label { font-family:'Cinzel',serif; font-size:9px; letter-spacing:3px; color:var(--blood-light); border:1px solid var(--blood); padding:3px 8px; border-radius:2px; text-transform:uppercase; }
+.dev-info { font-family:'Crimson Text',serif; font-size:13px; color:var(--stone-light); flex:1; }
+.dev-info span { color:var(--gold-light); font-weight:600; }
+.btn-tick { font-family:'Cinzel',serif; font-size:11px; letter-spacing:2px; padding:8px 18px; background:var(--blood); color:var(--parchment); border:1px solid var(--blood-light); cursor:pointer; transition:all 0.15s; border-radius:2px; text-transform:uppercase; }
+.btn-tick:hover { background:var(--blood-light); box-shadow:0 0 10px rgba(178,34,34,0.4); }
+.btn-tick:active { transform:scale(0.97); }
+
+/* TOAST */
+#toast { position:fixed; bottom:65px; left:50%; transform:translateX(-50%) translateY(14px); background:var(--ink); color:var(--gold-light); font-family:'Cinzel',serif; font-size:12px; letter-spacing:1px; padding:9px 22px; border:1px solid var(--gold); border-radius:2px; opacity:0; transition:all 0.28s; pointer-events:none; z-index:100; white-space:nowrap; }
+#toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+
+/* MODAL */
+#modal-bg { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:200; align-items:center; justify-content:center; }
+#modal-bg.show { display:flex; }
+#modal { background:var(--parchment); border:2px solid var(--border-rune); border-radius:3px; max-width:460px; width:90%; padding:0; overflow:hidden; }
+#modal-title { font-family:'Cinzel',serif; font-size:14px; font-weight:600; letter-spacing:2px; padding:12px 16px; background:var(--parchment-dark); border-bottom:1px solid var(--border-rune); color:var(--ink); }
+#modal-body { padding:16px; font-size:14px; line-height:1.7; color:var(--ink); }
+#modal-footer { padding:10px 16px; border-top:1px solid var(--parchment-deeper); display:flex; gap:8px; justify-content:flex-end; background:var(--parchment-dark); }
+
+/* KAMP-ANIMASJON */
+.combat-flash { animation: combatFlash 0.4s ease-out; }
+@keyframes combatFlash { 0%{background:#ffeecc} 100%{background:transparent} }
+
+/* SCROLLBAR */
+::-webkit-scrollbar { width:5px; }
+::-webkit-scrollbar-track { background:var(--parchment-dark); }
+::-webkit-scrollbar-thumb { background:var(--border-rune); border-radius:3px; }
+
+.rune-div { text-align:center; color:var(--border-rune); font-size:12px; letter-spacing:6px; padding:3px 0; opacity:0.5; }
+.empty-state { text-align:center; color:var(--stone); font-style:italic; font-size:13px; padding:20px; }
+
+/* SKIP I ANGREP */
+.raid-config { background:rgba(139,26,26,0.05); border:1px solid rgba(139,26,26,0.2); border-radius:2px; padding:10px 12px; margin-bottom:10px; font-size:13px; }
+.raid-config label { font-family:'Cinzel',serif; font-size:11px; color:var(--stone); display:block; margin-bottom:4px; }
+.raid-config input[type=range] { width:100%; accent-color:var(--blood); }
+.raid-config .raid-val { color:var(--blood); font-weight:600; font-family:'Cinzel',serif; }
+
+/* AUTH-SKJERM */
+#auth-screen {
+  display:flex; align-items:center; justify-content:center;
+  min-height:100vh; background:#0d0a06;
+  background-image:
+    radial-gradient(ellipse at 30% 50%, rgba(139,26,26,0.1) 0%, transparent 60%),
+    radial-gradient(ellipse at 70% 30%, rgba(42,74,107,0.1) 0%, transparent 60%);
+}
+#auth-box {
+  background:var(--parchment); border:2px solid var(--border-rune); border-radius:3px;
+  width:100%; max-width:400px; overflow:hidden; box-shadow:0 20px 60px rgba(0,0,0,0.6);
+}
+#auth-header { background:var(--ink); padding:24px 20px 20px; text-align:center; border-bottom:2px solid var(--gold); }
+#auth-logo { font-family:'Cinzel',serif; font-size:36px; font-weight:700; color:var(--gold-light); letter-spacing:8px; text-shadow:0 0 30px rgba(200,144,10,0.5); }
+#auth-logo span { color:var(--blood-light); }
+#auth-subtitle { font-family:'Crimson Text',serif; font-style:italic; color:var(--stone-light); font-size:13px; margin-top:4px; letter-spacing:2px; }
+#auth-tabs { display:flex; border-bottom:1px solid var(--border-rune); background:var(--parchment-dark); }
+.auth-tab { flex:1; text-align:center; padding:10px; font-family:'Cinzel',serif; font-size:11px; letter-spacing:2px; cursor:pointer; color:var(--stone); border-right:1px solid rgba(138,106,32,0.3); transition:all 0.15s; text-transform:uppercase; }
+.auth-tab:last-child { border-right:none; }
+.auth-tab.active { background:var(--parchment); color:var(--ink); font-weight:600; }
+#auth-form { padding:20px; }
+.auth-field { margin-bottom:14px; }
+.auth-label { display:block; font-family:'Cinzel',serif; font-size:10px; letter-spacing:2px; color:var(--stone); text-transform:uppercase; margin-bottom:5px; }
+.auth-input { width:100%; padding:9px 12px; background:rgba(255,255,255,0.6); border:1px solid var(--parchment-deeper); border-radius:2px; font-family:'Crimson Text',serif; font-size:15px; color:var(--ink); transition:border 0.15s; }
+.auth-input:focus { outline:none; border-color:var(--gold); background:rgba(255,255,255,0.9); }
+.auth-hint { font-size:12px; color:var(--stone); font-style:italic; margin-top:3px; }
+.btn-auth { width:100%; padding:11px; background:var(--ink); color:var(--gold-light); border:1px solid var(--gold); border-radius:2px; font-family:'Cinzel',serif; font-size:12px; letter-spacing:3px; text-transform:uppercase; cursor:pointer; transition:all 0.15s; margin-top:6px; }
+.btn-auth:hover { background:var(--blood); border-color:var(--blood-light); }
+.btn-auth:disabled { opacity:0.5; cursor:not-allowed; }
+#auth-error { background:rgba(139,26,26,0.08); border:1px solid rgba(139,26,26,0.3); border-radius:2px; padding:8px 12px; font-size:13px; color:var(--blood); margin-bottom:12px; display:none; }
+#auth-footer { padding:12px 20px; background:var(--parchment-dark); border-top:1px solid var(--parchment-deeper); text-align:center; font-size:12px; color:var(--stone); font-style:italic; }
+</style>
+</head>
+<body>
+
+<!-- AUTH-SKJERM -->
+<div id="auth-screen">
+  <div id="auth-box">
+    <div id="auth-header">
+      <div id="auth-logo">MID<span>GARD</span></div>
+      <div id="auth-subtitle">ᚱ Eit norrønt rike ventar deg ᚱ</div>
+    </div>
+    <div id="auth-tabs">
+      <div class="auth-tab active" onclick="switchAuthTab('inn')" id="at-inn">Logg inn</div>
+      <div class="auth-tab" onclick="switchAuthTab('reg')" id="at-reg">Registrer</div>
+    </div>
+    <div id="auth-form">
+      <div id="auth-error"></div>
+      <div id="form-inn">
+        <div class="auth-field">
+          <label class="auth-label">E-post</label>
+          <input class="auth-input" type="email" id="inn-epost" placeholder="jarl@midgard.no" autocomplete="email"/>
+        </div>
+        <div class="auth-field">
+          <label class="auth-label">Passord</label>
+          <input class="auth-input" type="password" id="inn-passord" placeholder="••••••••" autocomplete="current-password"/>
+        </div>
+        <button class="btn-auth" onclick="loggInn()" id="btn-inn">⚔ Tred inn i Midgard</button>
+      </div>
+      <div id="form-reg" style="display:none">
+        <div class="auth-field">
+          <label class="auth-label">Jarlnamn</label>
+          <input class="auth-input" type="text" id="reg-jarlnamn" placeholder="t.d. Gunnar Ravnklør" maxlength="30"/>
+          <div class="auth-hint">Dette er namnet andre jarlar vil kjenne deg som</div>
+        </div>
+        <div class="auth-field">
+          <label class="auth-label">E-post</label>
+          <input class="auth-input" type="email" id="reg-epost" placeholder="jarl@midgard.no" autocomplete="email"/>
+        </div>
+        <div class="auth-field">
+          <label class="auth-label">Passord</label>
+          <input class="auth-input" type="password" id="reg-passord" placeholder="Minst 6 teikn" autocomplete="new-password"/>
+        </div>
+        <button class="btn-auth" onclick="registrer()" id="btn-reg">🛡 Grunnlegg jarldøme</button>
+      </div>
+    </div>
+    <div id="auth-footer">Odins ravner ser alt. Handle med ære.</div>
+  </div>
+</div>
+
+<!-- SPELET -->
+<div id="app" style="display:none">
+
+<!-- HEADER -->
+<header id="header">
+  <div>
+    <div class="logo">MID<span>GARD</span></div>
+    <div style="font-family:'Crimson Text',serif;font-style:italic;color:var(--stone-light);font-size:12px;letter-spacing:2px">ᚱ Norrønt strategi ᚱ</div>
+  </div>
+  <div class="header-resources" id="header-res"></div>
+  <div class="jarl-name-header">Jarl <span>Gunnar Ravnklør</span></div>
+</header>
+
+<!-- LEFT: BY + HANDLINGER -->
+<aside id="left" class="panel">
+  <div id="city-svg-wrap">
+    <svg viewBox="0 0 250 190" xmlns="http://www.w3.org/2000/svg" id="city-svg">
+      <rect width="250" height="190" fill="#b8ccd8" rx="2"/>
+      <polygon points="0,110 50,55 100,90 140,35 185,80 220,45 250,70 250,190 0,190" fill="#7a8a7a" opacity="0.45"/>
+      <polygon points="0,130 60,82 115,115 165,62 210,100 250,78 250,190 0,190" fill="#5a6a5a" opacity="0.55"/>
+      <rect x="0" y="158" width="250" height="32" fill="#3a6a8a"/>
+      <rect x="0" y="156" width="250" height="5" fill="#4a7a9a" opacity="0.7"/>
+      <rect x="0" y="122" width="250" height="38" fill="#4a6a2a"/>
+      <rect x="0" y="120" width="250" height="5" fill="#3a5a1a"/>
+      <!-- LANGHUS -->
+      <g id="b-longhus">
+        <rect x="62" y="92" width="72" height="32" fill="#8B6914" rx="1"/>
+        <polygon points="57,92 138,92 128,75 72,75" fill="#6B4E0A"/>
+        <rect x="92" y="100" width="10" height="24" fill="#5a3a08"/>
+        <rect x="67" y="100" width="8" height="7" fill="#c8a040" opacity="0.6"/>
+        <rect x="109" y="100" width="8" height="7" fill="#c8a040" opacity="0.6"/>
+        <circle cx="89" cy="68" r="3" fill="#909090" opacity="0.5"/>
+        <circle cx="87" cy="61" r="2.5" fill="#909090" opacity="0.35"/>
+        <circle cx="90" cy="55" r="2" fill="#909090" opacity="0.2"/>
+        <text x="98" y="118" text-anchor="middle" font-size="6" fill="#f2e8d0" font-family="Cinzel,serif">LANGHUS</text>
+      </g>
+      <!-- MEAD HALL -->
+      <g id="b-mead" style="opacity:0.12;transition:opacity 0.7s">
+        <rect x="148" y="90" width="56" height="34" fill="#7a3a1a" rx="1"/>
+        <polygon points="144,90 208,90 200,73 152,73" fill="#5a2a0a"/>
+        <rect x="168" y="102" width="16" height="22" fill="#4a1a08"/>
+        <text x="176" y="116" text-anchor="middle" font-size="6" fill="#f2e8d0" font-family="Cinzel,serif">MEAD HALL</text>
+      </g>
+      <!-- NAUST -->
+      <g id="b-naust" style="opacity:0.12;transition:opacity 0.7s">
+        <rect x="8" y="140" width="52" height="18" fill="#5a4020" rx="3"/>
+        <ellipse cx="34" cy="140" rx="26" ry="5" fill="#4a3018"/>
+        <text x="34" y="152" text-anchor="middle" font-size="6" fill="#f2e8d0" font-family="Cinzel,serif">NAUST</text>
+      </g>
+      <!-- VAKTTÅRN -->
+      <g id="b-tower" style="opacity:0.12;transition:opacity 0.7s">
+        <rect x="6" y="78" width="20" height="46" fill="#6a6050" rx="1"/>
+        <rect x="3" y="73" width="26" height="9" fill="#5a5040" rx="1"/>
+        <rect x="6" y="69" width="6" height="8" fill="#5a5040"/>
+        <rect x="18" y="69" width="6" height="8" fill="#5a5040"/>
+        <text x="16" y="112" text-anchor="middle" font-size="5.5" fill="#f2e8d0" font-family="Cinzel,serif">TÅRN</text>
+      </g>
+      <!-- SMIE -->
+      <g id="b-forge" style="opacity:0.12;transition:opacity 0.7s">
+        <rect x="195" y="130" width="40" height="28" fill="#4a4040" rx="1"/>
+        <rect x="208" y="120" width="14" height="12" fill="#3a3030" rx="1"/>
+        <circle cx="212" cy="116" r="4" fill="#c05010" opacity="0.8"/>
+        <text x="215" y="148" text-anchor="middle" font-size="6" fill="#f2e8d0" font-family="Cinzel,serif">SMIE</text>
+      </g>
+      <!-- LANGSKIP -->
+      <g id="b-ship" style="opacity:0.12;transition:opacity 0.7s">
+        <ellipse cx="196" cy="168" rx="32" ry="8" fill="#5a3010"/>
+        <line x1="196" y1="160" x2="196" y2="142" stroke="#3a2008" stroke-width="1.5"/>
+        <polygon points="196,145 222,156 196,160" fill="#c8b880" opacity="0.9"/>
+        <text x="196" y="180" text-anchor="middle" font-size="6" fill="#f2e8d0" font-family="Cinzel,serif">LANGSKIP</text>
+      </g>
+      <g id="people-layer"></g>
+    </svg>
+  </div>
+
+  <div class="res-rows" id="res-rows"></div>
+  <div class="rune-div">ᚠ ᚢ ᚦ ᚨ ᚱ ᚲ</div>
+
+  <div class="tabs">
+    <div class="tab active" onclick="switchLeftTab('bygg')" id="lt-bygg">Bygg<span class="badge" id="bygg-badge" style="display:none">0</span></div>
+    <div class="tab" onclick="switchLeftTab('rekrutt')" id="lt-rekrutt">Rekrutt</div>
+    <div class="tab" onclick="switchLeftTab('handel')" id="lt-handel">Handel</div>
+  </div>
+  <div class="tab-panel active" id="tp-bygg"></div>
+  <div class="tab-panel" id="tp-rekrutt"></div>
+  <div class="tab-panel" id="tp-handel"></div>
+</aside>
+
+<!-- MAIN -->
+<main id="main">
+  <div id="skjald-panel" class="panel">
+    <div class="panel-title">📜 Skjaldens ord</div>
+    <div class="skjald-inner">
+      <div class="skjald-portrait">
+        <svg viewBox="0 0 110 140" xmlns="http://www.w3.org/2000/svg">
+          <rect width="110" height="140" fill="#0d0a06"/>
+          <ellipse cx="55" cy="128" rx="40" ry="22" fill="#1a1208"/>
+          <rect x="22" y="90" width="66" height="50" fill="#1a1208"/>
+          <ellipse cx="55" cy="68" rx="20" ry="24" fill="#c09060"/>
+          <ellipse cx="55" cy="52" rx="22" ry="15" fill="#5a3a18"/>
+          <rect x="36" y="70" width="7" height="26" fill="#5a3a18" rx="3"/>
+          <rect x="67" y="70" width="7" height="26" fill="#5a3a18" rx="3"/>
+          <ellipse cx="48" cy="66" rx="3" ry="2.8" fill="#1a0e08"/>
+          <ellipse cx="62" cy="66" rx="3" ry="2.8" fill="#1a0e08"/>
+          <circle cx="47.5" cy="65.2" r="0.9" fill="#fff" opacity="0.7"/>
+          <circle cx="61.5" cy="65.2" r="0.9" fill="#fff" opacity="0.7"/>
+          <ellipse cx="48" cy="66" rx="1.5" ry="1.5" fill="#3a5a8a" opacity="0.6"/>
+          <ellipse cx="62" cy="66" rx="1.5" ry="1.5" fill="#3a5a8a" opacity="0.6"/>
+          <path d="M55 70 Q53 76 50 78 Q55 80 60 78 Q57 76 55 70" fill="#a07050"/>
+          <path d="M49 82 Q55 86 61 82" stroke="#7a4028" stroke-width="1.5" fill="none"/>
+          <ellipse cx="55" cy="46" rx="23" ry="12" fill="#7a7060"/>
+          <rect x="33" y="40" width="44" height="8" fill="#8a8070" rx="2"/>
+          <rect x="52" y="33" width="6" height="13" fill="#9a9080"/>
+          <line x1="32" y1="96" x2="24" y2="124" stroke="#c8a040" stroke-width="2"/>
+          <polygon points="24,124 20,131 29,126" fill="#c8a040"/>
+          <text x="55" y="137" text-anchor="middle" font-size="6" fill="#6a5020" font-family="Cinzel,serif" letter-spacing="1">SKJALDEN</text>
+        </svg>
+      </div>
+      <div class="skjald-text">
+        <div class="skjald-label">ᚱ Skjalden taler ᚱ</div>
+        <div class="skjald-speech" id="skjald-speech">Velkomst, Jarl Gunnar Ravnklør. Ditt rike er ungt — bygg deg opp, rekrutter menn, og vær på vakt. Odins ravner ser alt.</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="main-tabs-wrap">
+    <div class="tabs">
+      <div class="tab active" onclick="switchMainTab('hendelser')" id="mt-hendelser">Hendelser<span class="badge" id="ev-badge" style="display:none">0</span></div>
+      <div class="tab" onclick="switchMainTab('kamp')" id="mt-kamp">Kamp & Raid</div>
+      <div class="tab" onclick="switchMainTab('jarlar')" id="mt-jarlar">Jarlar</div>
+      <div class="tab" onclick="switchMainTab('logg')" id="mt-logg">Krigslogg</div>
+    </div>
+    <div id="main-content">
+      <div class="tab-panel active" id="tp-hendelser"></div>
+      <div class="tab-panel" id="tp-kamp"></div>
+      <div class="tab-panel" id="tp-jarlar"></div>
+      <div class="tab-panel" id="tp-logg"></div>
+    </div>
+  </div>
+</main>
+
+<!-- RIGHT: KART + RANGLIST -->
+<aside id="right" class="panel">
+  <div class="panel-title">🗺 Midgard</div>
+  <div id="map-wrap">
+    <svg viewBox="0 0 240 210" xmlns="http://www.w3.org/2000/svg">
+      <rect width="240" height="210" fill="#3a5a78" rx="2"/>
+      <path d="M0,35 Q30,30 60,35 Q90,40 120,35 Q150,30 180,35 Q210,40 240,35" stroke="#4a6a88" stroke-width="1" fill="none" opacity="0.5"/>
+      <path d="M0,75 Q30,70 60,75 Q90,80 120,75 Q150,70 180,75 Q210,80 240,75" stroke="#4a6a88" stroke-width="1" fill="none" opacity="0.4"/>
+      <path d="M0,155 Q30,150 60,155 Q90,160 120,155 Q150,150 180,155 Q210,160 240,155" stroke="#4a6a88" stroke-width="1" fill="none" opacity="0.4"/>
+      <!-- Jotunheim -->
+      <polygon points="0,0 22,0 28,55 8,72 0,55" fill="#2a2a4a" stroke="#1a1a3a" stroke-width="1.5"/>
+      <text x="11" y="28" text-anchor="middle" font-size="6" fill="#9090c0" font-family="Cinzel,serif">JOTUN-</text>
+      <text x="11" y="37" text-anchor="middle" font-size="6" fill="#9090c0" font-family="Cinzel,serif">HEIM</text>
+      <text x="11" y="52" text-anchor="middle" font-size="13">⚡</text>
+      <!-- Spillerens territorium -->
+      <polygon points="28,48 108,38 128,118 88,140 18,120" fill="#3a6a2a" stroke="#2a5a1a" stroke-width="1.5"/>
+      <polygon points="18,120 88,140 68,178 8,162" fill="#2a5a1a" stroke="#1a4a1a" stroke-width="1"/>
+      <rect x="50" y="104" width="14" height="11" fill="#8B6914" rx="1"/>
+      <polygon points="47,104 68,104 64,96 53,96" fill="#6B4E0A"/>
+      <line x1="60" y1="96" x2="60" y2="86" stroke="#3a2008" stroke-width="1"/>
+      <polygon points="60,86 72,90 60,94" fill="#8b1a1a"/>
+      <text x="60" y="132" text-anchor="middle" font-size="6.5" fill="#f2e8d0" font-family="Cinzel,serif" font-weight="600">RAVNKLØR</text>
+      <!-- Ulvheim (fiende) -->
+      <polygon id="map-enemy1" points="128,25 215,15 234,98 182,115 118,82" fill="#6a3020" stroke="#4a2010" stroke-width="1.5"/>
+      <rect x="168" y="58" width="14" height="11" fill="#6a2a0a" rx="1"/>
+      <polygon points="165,58 186,58 182,50 171,50" fill="#4a1a00"/>
+      <line x1="175" y1="50" x2="175" y2="40" stroke="#2a0a00" stroke-width="1"/>
+      <polygon points="175,40 187,44 175,48" fill="#2a4a6b"/>
+      <text x="175" y="78" text-anchor="middle" font-size="6.5" fill="#f0b090" font-family="Cinzel,serif" font-weight="600">ULVHEIM</text>
+      <!-- Grønmark (nøytral) -->
+      <polygon points="108,128 185,118 204,195 122,205 78,178" fill="#4a5f2a" stroke="#3a4f1a" stroke-width="1"/>
+      <text x="145" y="170" text-anchor="middle" font-size="6.5" fill="#c0d090" font-family="Cinzel,serif">GRØNMARK</text>
+      <!-- Vanir -->
+      <polygon points="215,15 240,10 240,100 215,105 234,98" fill="#2a4a2a" stroke="#1a3a1a" stroke-width="1"/>
+      <text x="231" y="55" text-anchor="middle" font-size="6" fill="#90c090" font-family="Cinzel,serif">VANIR</text>
+      <!-- Skip -->
+      <g id="map-ship" style="display:none">
+        <ellipse cx="100" cy="126" rx="11" ry="4" fill="#5a3010"/>
+        <line x1="100" y1="122" x2="100" y2="114" stroke="#3a2008" stroke-width="1"/>
+        <polygon points="100,116 110,120 100,122" fill="#c8b880"/>
+      </g>
+      <!-- Ragnarok strip -->
+      <rect x="4" y="198" width="232" height="9" fill="rgba(0,0,0,0.3)" rx="1"/>
+      <rect id="map-ragna" x="4" y="198" width="46" height="9" fill="#8b1a1a" rx="1"/>
+      <text x="120" y="205" text-anchor="middle" font-size="5.5" fill="#f0b0a0" font-family="Cinzel,serif" letter-spacing="0.5" id="ragna-map-text">RAGNAROK 20%</text>
+    </svg>
+  </div>
+
+  <div class="panel-title">⚔ Ranglist</div>
+  <div id="jarl-rank-list" style="padding:6px 12px 8px"></div>
+
+  <div class="panel-title">☠ Ragnarok</div>
+  <div class="ragnarok-wrap">
+    <div class="ragna-label"><span>Verdens uro</span><span id="ragna-pct">20%</span></div>
+    <div class="ragna-track"><div class="ragna-fill" id="ragna-bar" style="width:20%"></div></div>
+    <div style="font-size:11px;color:var(--stone);margin-top:4px;font-style:italic" id="ragna-desc">Jotunene sover. Foreløpig.</div>
+  </div>
+
+  <div class="panel-title">📋 Siste krigshandlinger</div>
+  <div class="combat-log" id="combat-log-sidebar"></div>
+</aside>
+
+<!-- FOOTER DEV -->
+<footer id="footer">
+  <div class="dev-label">⚒ Dev</div>
+  <div class="dev-info">
+    Tick <span id="tick-num">0</span> &nbsp;|&nbsp;
+    <span id="game-time-display">Dag 1, morgen</span> &nbsp;|&nbsp;
+    Neste hendelse: <span id="next-ev-display">3 ticks</span>
+  </div>
+  <button class="btn-tick" onclick="advanceTick()">⏭ Lokal tick</button>
+  <button class="btn-tick" id="btn-global-tick" onclick="globalTick()" style="display:none;background:var(--rune-blue);border-color:#4a7aab">🌍 Global tick</button>
+  <button class="btn-tick" id="btn-reset" onclick="bekreftReset()" style="display:none;background:#3a2a0a;border-color:#8a6a20">🔄 Reset alle</button>
+</footer>
+
+</div>
+<div id="toast"></div>
+<div id="modal-bg">
+  <div id="modal">
+    <div id="modal-title"></div>
+    <div id="modal-body"></div>
+    <div id="modal-footer"></div>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════
+// SUPABASE KONFIG
+// Byt ut med dine eigne verdiar frå Supabase
+// Project Settings → API
+// ════════════════════════════════════════════
+const SUPABASE_URL = 'DIN_SUPABASE_URL_HER';
+const SUPABASE_KEY = 'DIN_ANON_KEY_HER';
+
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// Innlogga brukar og jarl
+let BRUKAR  = null; // Supabase auth-brukar
+let MIN_JARL = null; // rad frå jarlar-tabellen
+
+// ════════════════════════════════════════════
+// AUTH — HJELPARAR
+// ════════════════════════════════════════════
+function authFeil(msg) {
+  const el = document.getElementById('auth-error');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+function authSkjulFeil() {
+  document.getElementById('auth-error').style.display = 'none';
+}
+function switchAuthTab(id) {
+  ['inn','reg'].forEach(t => {
+    document.getElementById('at-'+t).classList.toggle('active', t===id);
+    document.getElementById('form-'+t).style.display = t===id ? 'block' : 'none';
+  });
+  authSkjulFeil();
+}
+
+// ════════════════════════════════════════════
+// REGISTRERING
+// ════════════════════════════════════════════
+async function registrer() {
+  const jarlnamn = document.getElementById('reg-jarlnamn').value.trim();
+  const epost    = document.getElementById('reg-epost').value.trim();
+  const passord  = document.getElementById('reg-passord').value;
+  authSkjulFeil();
+
+  if (!jarlnamn) { authFeil('Skriv inn eit jarlnamn.'); return; }
+  if (jarlnamn.length < 2) { authFeil('Jarlnamnet er for kort.'); return; }
+  if (!epost)    { authFeil('Skriv inn e-post.'); return; }
+  if (passord.length < 6) { authFeil('Passordet må ha minst 6 teikn.'); return; }
+
+  const btn = document.getElementById('btn-reg');
+  btn.disabled = true;
+  btn.textContent = 'Venter...';
+
+  try {
+    // 1. Opprett brukar i Supabase Auth
+    const { data: authData, error: authErr } = await sb.auth.signUp({ email: epost, password: passord });
+    if (authErr) throw authErr;
+
+    const authId = authData.user?.id;
+    if (!authId) throw new Error('Fekk ikkje brukar-ID frå Supabase.');
+
+    // 2. Vel ein ledig hex-posisjon
+    const { data: eksisterande } = await sb.from('jarlar').select('hex_x,hex_y');
+    const pos = finnLedigHex(eksisterande || []);
+
+    // 3. Opprett jarl-rad
+    const brukarnamn = epost.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g,'_');
+    const { data: jarlData, error: jarlErr } = await sb.from('jarlar').insert({
+      auth_id: authId,
+      brukarnamn: brukarnamn + '_' + Date.now().toString().slice(-4),
+      jarlnamn: jarlnamn,
+      hex_x: pos.x,
+      hex_y: pos.y,
+      er_bot: false
+    }).select().single();
+    if (jarlErr) throw jarlErr;
+
+    // 4. Opprett startressursar
+    await sb.from('ressursar').insert({ jarl_id: jarlData.id });
+
+    // 5. Opprett startbygning (longhus)
+    await sb.from('bygningar').insert({ jarl_id: jarlData.id, bygning_id: 'longhus', niva: 1 });
+
+    MIN_JARL = jarlData;
+    BRUKAR   = authData.user;
+    startSpel();
+
+  } catch(err) {
+    console.error(err);
+    authFeil(err.message || 'Noko gjekk gale. Prøv igjen.');
+    btn.disabled = false;
+    btn.textContent = '🛡 Grunnlegg jarldøme';
+  }
+}
+
+// ════════════════════════════════════════════
+// INNLOGGING
+// ════════════════════════════════════════════
+async function loggInn() {
+  const epost  = document.getElementById('inn-epost').value.trim();
+  const passord = document.getElementById('inn-passord').value;
+  authSkjulFeil();
+
+  if (!epost || !passord) { authFeil('Fyll inn e-post og passord.'); return; }
+
+  const btn = document.getElementById('btn-inn');
+  btn.disabled = true;
+  btn.textContent = 'Venter...';
+
+  try {
+    const { data, error } = await sb.auth.signInWithPassword({ email: epost, password: passord });
+    if (error) throw error;
+
+    BRUKAR = data.user;
+
+    // Hent jarl-rad
+    const { data: jarlData, error: jarlErr } = await sb.from('jarlar')
+      .select('*')
+      .eq('auth_id', BRUKAR.id)
+      .single();
+    if (jarlErr) throw new Error('Fann ikkje jarldømet ditt. Kontakt admin.');
+
+    MIN_JARL = jarlData;
+    startSpel();
+
+  } catch(err) {
+    console.error(err);
+    authFeil(err.message || 'Feil e-post eller passord.');
+    btn.disabled = false;
+    btn.textContent = '⚔ Tred inn i Midgard';
+  }
+}
+
+// Enter-tast på innlogging
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Enter') return;
+  const regVis = document.getElementById('form-reg').style.display !== 'none';
+  if (regVis) registrer(); else loggInn();
+});
+
+// ════════════════════════════════════════════
+// HEX-POSISJON
+// ════════════════════════════════════════════
+function finnLedigHex(eksisterande) {
+  const tekne = new Set(eksisterande.map(j => j.hex_x+','+j.hex_y));
+  // Spiralsøk frå sentrum
+  for (let r = 0; r <= 10; r++) {
+    for (let x = -r; x <= r; x++) {
+      for (let y = -r; y <= r; y++) {
+        if (Math.abs(x)+Math.abs(y) === r && !tekne.has(x+','+y)) {
+          return { x, y };
+        }
+      }
+    }
+  }
+  return { x: Math.floor(Math.random()*20)-10, y: Math.floor(Math.random()*20)-10 };
+}
+
+// ════════════════════════════════════════════
+// START SPELET
+// ════════════════════════════════════════════
+async function startSpel() {
+  document.getElementById('auth-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'grid';
+
+  // Oppdater jarlnamn i header
+  const jarlEl = document.querySelector('.jarl-name-header span');
+  if (jarlEl && MIN_JARL) jarlEl.textContent = MIN_JARL.jarlnamn;
+
+  // Hent ressursar frå Supabase
+  const { data: resData, error: resErr } = await sb.from('ressursar')
+    .select('*')
+    .eq('jarl_id', MIN_JARL.id)
+    .single();
+
+  if (resData && !resErr) {
+    S.r.silver     = resData.sølv      ?? S.r.silver;
+    S.r.mead       = resData.mjød      ?? S.r.mead;
+    S.r.honour     = resData.ære       ?? S.r.honour;
+    S.r.food       = resData.mat       ?? S.r.food;
+    S.r.timber     = resData.tømmer    ?? S.r.timber;
+    S.r.iron       = resData.jern      ?? S.r.iron;
+    S.r.warriors   = resData.krigere   ?? S.r.warriors;
+    S.r.population = resData.befolkning?? S.r.population;
+  }
+
+  // Hent bygningar frå Supabase
+  const { data: bygData } = await sb.from('bygningar')
+    .select('*')
+    .eq('jarl_id', MIN_JARL.id);
+
+  if (bygData) {
+    // Nullstill alle bygningar
+    Object.keys(S.buildings).forEach(k => S.buildings[k] = false);
+    S.buildings.longhus = true; // alltid sant
+
+    bygData.forEach(b => {
+      if (b.niva > 0 && !b.under_bygging) S.buildings[b.bygning_id] = true;
+      if (b.under_bygging) S.inProgress[b.bygning_id] = b.ferdig_tick - S.tick;
+    });
+
+    // Naust låser opp skip
+    if (S.buildings.naust) BLDGS.find(b=>b.id==='ship').unlockTick = 0;
+  }
+
+  // Hent verdsstat (tick + ragnarok)
+  const { data: verdData } = await sb.from('verdsstat').select('*').eq('id',1).single();
+  if (verdData) {
+    S.tick     = verdData.tick;
+    S.ragnarok = verdData.ragnarok;
+    document.getElementById('tick-num').textContent = S.tick;
+    document.getElementById('game-time-display').textContent = gameTime(S.tick);
+  }
+
+  const erNy = !resData || resData.sølv === 10;
+  if (erNy) {
+    addEventCard({ type:'divine', icon:'🦅', title:'Velkommen til Midgard',
+      desc:`Du er ${MIN_JARL?.jarlnamn || 'Jarl'}. Bygg jarldømet ditt, rekrutter menn, og ta det som er ditt.`,
+      choices:[{label:'For Odin!', fn:()=>{ chg('honour',1); tk('✦ Ære til Odin!'); }}]
+    });
+  } else {
+    addEventCard({ type:'info', icon:'🌅', title:'Tilbake i Midgard',
+      desc:`Velkomen attende, ${MIN_JARL.jarlnamn}. Verda har tikka vidare medan du var borte.`,
+      choices:[{label:'Sjå status', fn:()=>tk('Ressursar henta frå Supabase ✓')}]
+    });
+  }
+
+  sjekkAdmin();
+  await lastJarlarInnICache();
+  updAll();
+  updLoggPanel();
+}
+
+// ════════════════════════════════════════════
+// ADMIN
+// ════════════════════════════════════════════
+const ADMIN_EPOST = 'frode@hammerseth.com';
+
+function sjekkAdmin() {
+  if (!BRUKAR) return;
+  if (BRUKAR.email === ADMIN_EPOST) {
+    document.getElementById('btn-global-tick').style.display = 'inline-block';
+    document.getElementById('btn-reset').style.display = 'inline-block';
+  }
+}
+
+// ── Produksjon per jarl basert på bygningar ──
+function prodForJarl(r, bygningar) {
+  const har = (id) => bygningar.some(b => b.bygning_id === id && b.niva > 0 && !b.under_bygging);
+  let p = {
+    silver:  2 + Math.floor((Math.random()-0.5)*3),
+    mead:   -1,
+    food:    3 - Math.ceil((r.krigere||5) * 0.3),
+    timber:  2,
+    iron:    1,
+    honour:  0,
+    warriors:0
+  };
+  if (har('mead_hall')) { p.silver+=4; p.mead+=3; p.honour+=1; }
+  if (har('naust'))     { p.silver+=2; }
+  if (har('tower'))     { p.honour+=1; }
+  if (har('forge'))     { p.iron+=2; p.timber-=1; }
+  if (har('ship'))      { p.silver+=6; p.mead-=2; }
+  if ((r['mjød']||12) <= 0) { p.warriors-=1; p.honour-=1; }
+  if ((r.mat||20) <= 0)     { p.warriors-=1; }
+  return p;
+}
+
+async function globalTick() {
+  if (!BRUKAR || BRUKAR.email !== ADMIN_EPOST) return;
+
+  const btn = document.getElementById('btn-global-tick');
+  btn.disabled = true;
+  btn.textContent = '⏳ Tikkar...';
+
+  try {
+    // 1. Hent verdsstat
+    const { data: verd } = await sb.from('verdsstat').select('*').eq('id',1).single();
+    const nyTick  = (verd?.tick || 0) + 1;
+    const nyRagna = Math.min(100, (verd?.ragnarok || 20) + (Math.random() > 0.75 ? 2 : 0));
+
+    // 2. Oppdater verdsstat
+    await sb.from('verdsstat').upsert({
+      id: 1, tick: nyTick,
+      ragnarok: Math.round(nyRagna),
+      sist_tick: new Date().toISOString()
+    }, { onConflict: 'id' });
+
+    // 3. Hent alle jarlar, ressursar og bygningar
+    const { data: alleJarlar } = await sb.from('jarlar').select('id, er_bot, jarlnamn');
+    const { data: alleRes    } = await sb.from('ressursar').select('*');
+    const { data: alleBygn   } = await sb.from('bygningar').select('*');
+    if (!alleJarlar) throw new Error('Ingen jarlar funne');
+
+    const resOppdateringar  = [];
+    const bygnOppdateringar = [];
+
+    for (const j of alleJarlar) {
+      const r = alleRes?.find(x => x.jarl_id === j.id) || {};
+      const bygn = alleBygn?.filter(b => b.jarl_id === j.id) || [];
+
+      // Sjekk bygningar under arbeid
+      for (const b of bygn) {
+        if (b.under_bygging && b.ferdig_tick !== null && nyTick >= b.ferdig_tick) {
+          bygnOppdateringar.push({
+            id:            b.id,
+            jarl_id:       j.id,
+            bygning_id:    b.bygning_id,
+            niva:          1,
+            under_bygging: false,
+            ferdig_tick:   null
+          });
+        }
+      }
+
+      // Rekn produksjon
+      const p = prodForJarl(r, bygn);
+
+      resOppdateringar.push({
+        jarl_id:    j.id,
+        'sølv':     Math.max(0, (r['sølv']     || 10) + p.silver),
+        'mjød':     Math.max(0, (r['mjød']     || 12) + p.mead),
+        'ære':      Math.max(0, (r['ære']      || 12) + p.honour),
+        mat:        Math.max(0, (r.mat         || 20) + p.food),
+        'tømmer':   Math.max(0, (r['tømmer']   || 8)  + p.timber),
+        jern:       Math.max(0, (r.jern        || 3)  + p.iron),
+        krigere:    Math.max(0, (r.krigere     || 5)  + p.warriors),
+        befolkning: r.befolkning || 14,
+        oppdatert:  new Date().toISOString()
+      });
+    }
+
+    // 4. Batch-upsert ressursar
+    if (resOppdateringar.length)  await sb.from('ressursar').upsert(resOppdateringar,  { onConflict: 'jarl_id' });
+    // 5. Oppdater ferdige bygningar
+    if (bygnOppdateringar.length) await sb.from('bygningar').upsert(bygnOppdateringar, { onConflict: 'id' });
+
+    // 6. Oppdater eigen lokal tilstand
+    S.tick     = nyTick;
+    S.ragnarok = nyRagna;
+
+    const { data: mineRes } = await sb.from('ressursar').select('*').eq('jarl_id', MIN_JARL.id).single();
+    if (mineRes) {
+      S.r.silver     = mineRes['sølv']     ?? S.r.silver;
+      S.r.mead       = mineRes['mjød']     ?? S.r.mead;
+      S.r.honour     = mineRes['ære']      ?? S.r.honour;
+      S.r.food       = mineRes.mat         ?? S.r.food;
+      S.r.timber     = mineRes['tømmer']   ?? S.r.timber;
+      S.r.iron       = mineRes.jern        ?? S.r.iron;
+      S.r.warriors   = mineRes.krigere     ?? S.r.warriors;
+      S.r.population = mineRes.befolkning  ?? S.r.population;
+    }
+
+    // Sjekk eigne bygningar for ferdigstilling
+    const { data: mineBygn } = await sb.from('bygningar').select('*').eq('jarl_id', MIN_JARL.id);
+    if (mineBygn) {
+      Object.keys(S.buildings).forEach(k => { if (k !== 'longhus') S.buildings[k] = false; });
+      mineBygn.forEach(b => {
+        if (b.niva > 0 && !b.under_bygging) S.buildings[b.bygning_id] = true;
+        if (b.under_bygging) {
+          const tLeft = b.ferdig_tick - nyTick;
+          if (tLeft <= 0) {
+            S.buildings[b.bygning_id] = true;
+            tk(`🏗 ${BLDGS.find(x=>x.id===b.bygning_id)?.name || b.bygning_id} ferdigbygget!`, 3500);
+          } else {
+            S.inProgress[b.bygning_id] = tLeft;
+          }
+        }
+      });
+      if (S.buildings.naust) BLDGS.find(b=>b.id==='ship').unlockTick = 0;
+    }
+
+    document.getElementById('tick-num').textContent = S.tick;
+    document.getElementById('game-time-display').textContent = gameTime(S.tick);
+    document.getElementById('next-ev-display').textContent = S.nextEventIn + ' ticks';
+
+    // Trigger lokal hendelse med same sjanse som vanleg tick
+    S.nextEventIn--;
+    if (S.nextEventIn <= 0 && !isNight(S.tick)) {
+      trigEvent();
+      S.nextEventIn = 2 + Math.floor(Math.random() * 4);
+    }
+
+    updAll();
+    updRagna();
+    tk(`🌍 Global tick ${S.tick} — ${bygnOppdateringar.length} bygningar ferdigstilt`, 3500);
+
+  } catch(err) {
+    console.error(err);
+    tk('Feil ved global tick: ' + err.message);
+  }
+
+  btn.disabled = false;
+  btn.textContent = '🌍 Global tick';
+}
+
+// ── RESET ALLE ──
+function bekreftReset() {
+  if (!BRUKAR || BRUKAR.email !== ADMIN_EPOST) return;
+  showModal(
+    '⚠ Reset heile verda',
+    `<div style="color:var(--blood);font-size:15px;margin-bottom:10px">Dette nullstiller <b>alle</b> spelarar og botar tilbake til start.</div>
+    <ul style="font-size:14px;color:var(--stone);line-height:2;padding-left:16px">
+      <li>Alle ressursar → startverdiar</li>
+      <li>Alle bygningar → sletta (longhus att)</li>
+      <li>Tick og Ragnarok → 0 / 20%</li>
+      <li>Brukarkontoar i Supabase Auth → <b>ikkje</b> sletta</li>
+    </ul>
+    <div style="font-size:13px;font-style:italic;color:var(--stone);margin-top:8px">Spelarar kan logge inn igjen med same passord.</div>`,
+    [
+      { label: '🔄 Ja, reset alt', fn: utforReset },
+      { label: 'Avbryt',          fn: closeModal  }
+    ]
+  );
+}
+
+async function utforReset() {
+  closeModal();
+  tk('Resetter verda...', 5000);
+
+  try {
+    // 1. Nullstill verdsstat
+    await sb.from('verdsstat').upsert({
+      id: 1, tick: 0, ragnarok: 20,
+      sist_tick: new Date().toISOString()
+    }, { onConflict: 'id' });
+
+    // 2. Slett all data (raid, hendingar, bygningar, ressursar)
+    await sb.from('raid').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    await sb.from('hendingar').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    await sb.from('bygningar').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    await sb.from('ressursar').delete().neq('jarl_id', '00000000-0000-0000-0000-000000000000');
+
+    // 3. Hent alle jarlar og gjenopprett startdata
+    const { data: alleJarlar } = await sb.from('jarlar').select('id, er_bot, bot_åtferd');
+
+    const startRes = alleJarlar.map(j => ({
+      jarl_id:    j.id,
+      'sølv':     j.er_bot ? (j.bot_åtferd === 'handlar' ? 30 : j.bot_åtferd === 'aggressiv' ? 25 : 10) : 10,
+      'mjød':     12,
+      'ære':      12,
+      mat:        20,
+      'tømmer':   8,
+      jern:       3,
+      krigere:    j.er_bot ? (j.bot_åtferd === 'aggressiv' ? 12 : j.bot_åtferd === 'defensiv' ? 8 : 5) : 5,
+      befolkning: 14,
+      oppdatert:  new Date().toISOString()
+    }));
+
+    const startBygn = alleJarlar.map(j => ({
+      jarl_id:       j.id,
+      bygning_id:    'longhus',
+      niva:          1,
+      under_bygging: false,
+      ferdig_tick:   null
+    }));
+
+    await sb.from('ressursar').upsert(startRes,  { onConflict: 'jarl_id' });
+    await sb.from('bygningar').insert(startBygn);
+
+    // 4. Nullstill lokal tilstand
+    S.tick     = 0;
+    S.ragnarok = 20;
+    S.r = { silver:10, warriors:5, mead:12, honour:12, food:20, timber:8, iron:3, population:14 };
+    S.buildings = { longhus:true, mead_hall:false, naust:false, tower:false, forge:false, ship:false };
+    S.inProgress = {};
+    S.events = [];
+    S.combatLog = [];
+    S.raidInFlight = null;
+    S.nextEventIn = 3;
+
+    document.getElementById('tp-hendelser').innerHTML = '';
+    document.getElementById('tp-logg').innerHTML = '';
+    document.getElementById('combat-log-sidebar').innerHTML = '';
+    document.getElementById('tick-num').textContent = '0';
+    document.getElementById('game-time-display').textContent = gameTime(0);
+
+    addEventCard({ type:'divine', icon:'🔄', title:'Verda er gjenfødd',
+      desc:'Ragnarok feia over Midgard. Alt byrjar på nytt. Kva vil du byggje av oska?',
+      choices:[{label:'For Odin!', fn:()=>{ chg('honour',1); tk('✦ Eit nytt kapittel!'); }}]
+    });
+
+    updAll();
+    updRagna();
+    tk('✅ Reset fullført — alle jarlar starta på nytt!', 4000);
+
+  } catch(err) {
+    console.error(err);
+    tk('Feil ved reset: ' + err.message);
+  }
+}
+
+// Sjekk om allereie innlogga (ved reload)
+(async () => {
+  const { data } = await sb.auth.getSession();
+  if (data.session) {
+    BRUKAR = data.session.user;
+    const { data: jarlData } = await sb.from('jarlar')
+      .select('*')
+      .eq('auth_id', BRUKAR.id)
+      .single();
+    if (jarlData) {
+      MIN_JARL = jarlData;
+      startSpel();
+      return;
+    }
+  }
+  // Ikkje innlogga — vis auth-skjermen
+  document.getElementById('auth-screen').style.display = 'flex';
+})();
+
+// ════════════════════════════════════════════
+// TILSTAND
+// ════════════════════════════════════════════
+const S = {
+  tick: 0,
+  r: { silver:10, warriors:5, mead:12, honour:12, food:20, timber:8, iron:3, population:14 },
+  buildings: { longhus:true, mead_hall:false, naust:false, tower:false, forge:false, ship:false },
+  inProgress: {}, // { buildingId: ticksRemaining }
+  units: { bonder:8, krigers:5, skald:0, kjøpmann:1 },
+  ragnarok: 20,
+  nextEventIn: 3,
+  events: [],
+  combatLog: [],
+  jarls: [], // Lastar frå Supabase ved oppstart
+  raidInFlight: null // { target, warriors, arriveTick }
+};
+
+// ════════════════════════════════════════════
+// PRODUKSJON PER TICK
+// ════════════════════════════════════════════
+function prod() {
+  let p = { silver:2, mead:-1, food:3-Math.ceil(S.r.warriors*0.3), timber:2, iron:1, honour:0, warriors:0, population:0 };
+  if (S.buildings.mead_hall) { p.silver+=4; p.mead+=3; p.honour+=1; }
+  if (S.buildings.naust)     { p.silver+=2; }
+  if (S.buildings.tower)     { p.honour+=1; }
+  if (S.buildings.forge)     { p.iron+=2; p.timber-=1; }
+  if (S.buildings.ship)      { p.silver+=6; p.mead-=2; }
+  if (S.r.mead<=0)           { p.warriors-=1; p.honour-=1; }
+  if (S.r.food<=0)           { p.warriors-=1; p.population-=1; }
+  return p;
+}
+
+// ════════════════════════════════════════════
+// BYGGVERK
+// ════════════════════════════════════════════
+const BLDGS = [
+  { id:'longhus',   name:'Langhus',    icon:'🏠', cost:{},                        desc:'Startbygning. +befolkning/tick.',   unlockTick:0,  buildTicks:0 },
+  { id:'mead_hall', name:'Mead Hall',  icon:'🍺', cost:{timber:10,silver:15},      desc:'+4🪙 +3🍺 +1✦ per tick',           unlockTick:2,  buildTicks:2 },
+  { id:'naust',     name:'Naust',      icon:'⛵', cost:{timber:8,iron:4},           desc:'+2🪙/tick. Muliggjør Langskip.',    unlockTick:4,  buildTicks:2 },
+  { id:'tower',     name:'Vakttårn',   icon:'🗼', cost:{timber:6,iron:8},           desc:'+1✦/tick. Varsler angrep tidlig.', unlockTick:6,  buildTicks:3 },
+  { id:'forge',     name:'Smie',       icon:'⚒', cost:{timber:5,silver:10},        desc:'+2⛏/tick. Nødvendig for jern.',    unlockTick:3,  buildTicks:2 },
+  { id:'ship',      name:'Langskip',   icon:'🚢', cost:{timber:15,iron:8,silver:20},desc:'+6🪙/tick. Krever naust.',         unlockTick:999,buildTicks:3 },
+];
+
+// ════════════════════════════════════════════
+// REKRUTTERING
+// ════════════════════════════════════════════
+const RECRUITS = [
+  { id:'bonde',    name:'Bonde',      icon:'🌾', cost:{silver:3},           desc:'Produserer mat. Dårlig i kamp.',    perUnit:{ food:2 } },
+  { id:'kriger',   name:'Kriger',     icon:'⚔️', cost:{silver:8,mead:2},    desc:'Sterk i kamp. Krever mat og mjød.', perUnit:{ warriors:1 } },
+  { id:'skald2',   name:'Skald',      icon:'📜', cost:{silver:12,mead:3},   desc:'+2✦/tick. Synger om dine bragder.', perUnit:{ honour:2 } },
+  { id:'kjopmann', name:'Kjøpmann',   icon:'⚓', cost:{silver:6},           desc:'+3🪙/tick. Risikabelt å sende ut.', perUnit:{ silver:3 } },
+  { id:'speider',  name:'Speider',    icon:'👁', cost:{silver:5,food:3},    desc:'Avslører fiendestyrke før raid.',    perUnit:{} },
+];
+
+// ════════════════════════════════════════════
+// HANDEL
+// ════════════════════════════════════════════
+const TRADES = [
+  { id:'t1', name:'Sølv → Tømmer',  buy:'timber', buyAmt:5,  sell:'silver', sellAmt:8,  desc:'Kjøp 5 tømmer for 8 sølv' },
+  { id:'t2', name:'Sølv → Jern',    buy:'iron',   buyAmt:4,  sell:'silver', sellAmt:10, desc:'Kjøp 4 jern for 10 sølv' },
+  { id:'t3', name:'Sølv → Mjød',    buy:'mead',   buyAmt:6,  sell:'silver', sellAmt:9,  desc:'Kjøp 6 mjød for 9 sølv' },
+  { id:'t4', name:'Tømmer → Sølv',  buy:'silver', buyAmt:6,  sell:'timber', sellAmt:5,  desc:'Selg 5 tømmer for 6 sølv' },
+  { id:'t5', name:'Mjød → Ære',     buy:'honour', buyAmt:2,  sell:'mead',   sellAmt:5,  desc:'Bruk 5 mjød, få 2 ære' },
+  { id:'t6', name:'Sølv → Mat',     buy:'food',   buyAmt:8,  sell:'silver', sellAmt:7,  desc:'Kjøp 8 mat for 7 sølv' },
+];
+
+// ════════════════════════════════════════════
+// HENDELSESPOOL
+// ════════════════════════════════════════════
+const EVENTS = [
+  { id:'trader', type:'trade', icon:'⚓', title:'Handelsskip fra sør',
+    desc:'Et fremmed fartøy ankommer. Kapteinen tilbyr jern mot sølv — 8 jern for 12 sølv, eller frisk mat.',
+    cond:()=>true,
+    choices:[
+      {label:'Kjøp jern',  fn:()=>{ chg('iron',8); chg('silver',-12); tk('Jern kjøpt! +8⛏'); }},
+      {label:'Kjøp mat',   fn:()=>{ chg('food',12); chg('silver',-9); tk('+12🌾 kjøpt'); }},
+      {label:'Avvis',      fn:()=>tk('Skipet letter anker.') }
+    ]},
+  { id:'odin', type:'divine', icon:'🦅', title:'Odins ravner',
+    desc:'Hugin og Munin lander på taket. Et budskap fra Allvater: din ære er sett. Odin belønner den sterke.',
+    cond:()=>S.r.honour>=15,
+    choices:[{label:'Motta velsignelsen', fn:()=>{ chg('honour',3); chg('warriors',2); tk('Odin belønner! +3✦ +2⚔'); }}]},
+  { id:'jotun', type:'urgent', icon:'🧊', title:'Jotun-varsel',
+    desc:'Vaktmannen rapporterer et gigantisk avtrykk i snøen nord for grensen. Ragnarok-meteret stiger.',
+    cond:()=>S.ragnarok>10,
+    choices:[
+      {label:'Offer til Odin (10🪙)', fn:()=>{ chg('silver',-10); S.ragnarok=Math.max(0,S.ragnarok-8); updRagna(); tk('Offer gitt. Ragnarok dempes.'); }},
+      {label:'Send speider',         fn:()=>{ chg('honour',1); tk('Speider utsendt. Vi venter rapport.'); }},
+      {label:'Ignorer',              fn:()=>{ S.ragnarok+=6; updRagna(); tk('Jotunene styrkes...'); }}
+    ]},
+  { id:'harvest', type:'trade', icon:'🌾', title:'God høst',
+    desc:'Bøndene melder om uvanlig rikelig avling. Lagrene fylles, folket er glade.',
+    cond:()=>true,
+    choices:[
+      {label:'Feir med mjød', fn:()=>{ chg('food',18); chg('mead',-4); chg('honour',1); tk('Feiring! +18🌾'); }},
+      {label:'Spar alt',      fn:()=>{ chg('food',22); tk('Klok jarl. +22🌾'); }}
+    ]},
+  { id:'deserter', type:'urgent', icon:'⚠️', title:'Krigere deserter',
+    desc:'Tre av dine menn har flyktet i natt — mjødkaret er tomt og lønnen uteble. Resten er urolige.',
+    cond:()=>S.r.mead<4&&S.r.warriors>2,
+    choices:[
+      {label:'Øk lønnen (15🪙)',  fn:()=>{ chg('silver',-15); chg('honour',1); tk('Lojaliteten kjøpt.'); }},
+      {label:'La dem gå',         fn:()=>{ chg('warriors',-3); chg('honour',-2); tk('3 krigere borte. -2✦'); }}
+    ]},
+  { id:'skald_arrives', type:'divine', icon:'📜', title:'Omreisende skald',
+    desc:'En gammel skald ber om husly. Han lover å synge om Gunnar Ravnklør i alle ende av Midgard.',
+    cond:()=>S.buildings.longhus,
+    choices:[
+      {label:'Gi husly og mjød', fn:()=>{ chg('mead',-4); chg('honour',5); chg('population',1); tk('+5✦ +1 befolkning!'); }},
+      {label:'Avvis',            fn:()=>{ chg('honour',-1); tk('Skurken vil tale ille om deg.'); }}
+    ]},
+  { id:'raid_warning', type:'urgent', icon:'🛡', title:'Fremmed flåte observert',
+    desc:'En ukjent flåte er sett på havet, kurs mot landet ditt. De ankommer neste tick. Hvem er det?',
+    cond:()=>S.tick>3&&S.r.warriors>0,
+    choices:[
+      {label:'Forbered forsvar',       fn:()=>{ chg('honour',2); scheduleInvasion(); tk('Menn til plass! Forsvaret klart.'); }},
+      {label:'Send budbringer (fred)', fn:()=>{ chg('silver',-8); tk('Bud sendt. Vi håper på svar.'); }},
+      {label:'Evakuer til skogs',      fn:()=>{ chg('honour',-4); tk('Feighet. -4✦'); }}
+    ]},
+  { id:'vanir_offer', type:'divine', icon:'🌿', title:'Vanir-tilbud',
+    desc:'Et bud fra Vanir-landet ankommer. De tilbyr en handelsrute mot at du lar Grønmark være i fred.',
+    cond:()=>S.tick>5,
+    choices:[
+      {label:'Inngå pakt',   fn:()=>{ chg('honour',2); chg('silver',15); tk('Pakt inngått med Vanir. +15🪙'); }},
+      {label:'Avslå',        fn:()=>{ tk('Budet vender tomhendt tilbake.'); }}
+    ]},
+];
+
+// ════════════════════════════════════════════
+// HJELPERE
+// ════════════════════════════════════════════
+function chg(key, amt) {
+  S.r[key] = Math.max(0, (S.r[key]||0)+amt);
+  updHeader();
+  lagreRessursar();
+}
+
+// Debounced lagring til Supabase (ventar 800ms etter siste endring)
+let lagreTimer = null;
+function lagreRessursar() {
+  if (!MIN_JARL) return;
+  clearTimeout(lagreTimer);
+  lagreTimer = setTimeout(async () => {
+    await sb.from('ressursar').upsert({
+      jarl_id:    MIN_JARL.id,
+      'sølv':     S.r.silver,
+      'mjød':     S.r.mead,
+      'ære':      S.r.honour,
+      mat:        S.r.food,
+      'tømmer':   S.r.timber,
+      jern:       S.r.iron,
+      krigere:    S.r.warriors,
+      befolkning: S.r.population,
+      oppdatert:  new Date().toISOString()
+    }, { onConflict: 'jarl_id' });
+  }, 800);
+}
+function tk(msg, dur=2600) {
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  clearTimeout(tk._t); tk._t=setTimeout(()=>t.classList.remove('show'), dur);
+}
+function gameTime(tick) {
+  const dag=Math.floor(tick/6)+1;
+  const tider=['morgen','formiddag','middag','ettermiddag','kveld','natt'];
+  return `Dag ${dag}, ${tider[tick%6]}`;
+}
+function isNight(tick) { return tick%6===5; } // natt = tick%6===5
+
+// ════════════════════════════════════════════
+// TICK
+// ════════════════════════════════════════════
+function advanceTick() {
+  S.tick++;
+  const p = prod();
+  for (const [k,v] of Object.entries(p)) S.r[k]=Math.max(0,(S.r[k]||0)+v);
+
+  // Bygg i gang
+  for (const [id, rem] of Object.entries(S.inProgress)) {
+    S.inProgress[id]--;
+    if (S.inProgress[id]<=0) {
+      S.buildings[id]=true;
+      delete S.inProgress[id];
+      tk(`🏗 ${BLDGS.find(b=>b.id===id).name} ferdigbygget!`, 3500);
+      updCity();
+      if (id==='naust') BLDGS.find(b=>b.id==='ship').unlockTick=S.tick;
+    }
+  }
+
+  // Ragnarok
+  S.ragnarok=Math.min(100,S.ragnarok+(Math.random()>0.75?2:0));
+
+  // Hendelse?
+  S.nextEventIn--;
+  if (S.nextEventIn<=0 && !isNight(S.tick)) {
+    trigEvent();
+    S.nextEventIn=2+Math.floor(Math.random()*4);
+  }
+
+  // Raid ankommer?
+  if (S.raidInFlight && S.tick>=S.raidInFlight.arriveTick) {
+    resolveRaid();
+  }
+
+  // Natt: AI invasjon?
+  if (isNight(S.tick) && Math.random()>0.7 && S.tick>4) {
+    aiInvade();
+  }
+
+  // NPC-jarlar gjør noe
+  npcActions();
+
+  // Skjald-tekst
+  updSkjald();
+  updAll();
+  document.getElementById('tick-num').textContent=S.tick;
+  document.getElementById('game-time-display').textContent=gameTime(S.tick);
+  document.getElementById('next-ev-display').textContent=S.nextEventIn+' ticks';
+}
+
+// ════════════════════════════════════════════
+// NPC-JARLAR
+// ════════════════════════════════════════════
+function npcActions() {
+  // Oppdater lokalt cache — faktisk DB-oppdatering skjer i globalTick
+  S.jarls.forEach(j => {
+    j.silver  = (j.silver  || 10) + 2 + Math.floor(Math.random()*3);
+    j.warriors= (j.warriors|| 5)  + (Math.random()>0.8 ? 1 : 0);
+    j.honour  = (j.honour  || 10) + (Math.random()>0.85 ? 1 : 0);
+  });
+  updRankList();
+}
+
+// Last alle jarlar frå Supabase inn i S.jarls
+async function lastJarlarInnICache() {
+  const { data: jarlar } = await sb.from('jarlar').select('id, jarlnamn, er_bot, bot_åtferd');
+  const { data: alleRes } = await sb.from('ressursar').select('jarl_id, sølv, ære, krigere');
+  if (!jarlar) return;
+  S.jarls = jarlar
+    .filter(j => j.id !== MIN_JARL?.id)
+    .map(j => {
+      const r = alleRes?.find(x => x.jarl_id === j.id) || {};
+      return {
+        id:       j.id,
+        name:     j.jarlnamn,
+        icon:     j.er_bot ? (j.bot_åtferd==='aggressiv'?'🐺':j.bot_åtferd==='defensiv'?'🛡':j.bot_åtferd==='handlar'?'⚓':'🐻') : '🦅',
+        honour:   r['ære']    || 10,
+        warriors: r.krigere   || 5,
+        silver:   r['sølv']   || 10,
+        relation: 'nøytral',
+        er_bot:   j.er_bot
+      };
+    });
+  updRankList();
+}
+
+// ════════════════════════════════════════════
+// INVASJON (AI)
+// ════════════════════════════════════════════
+function scheduleInvasion() {
+  // Lokal invasjon planlegges til neste tick
+  setTimeout(()=>{ doInvasion('Orm Ulveblod', Math.floor(Math.random()*6)+3); }, 3000);
+}
+function aiInvade() {
+  const botar = S.jarls.filter(j => j.er_bot);
+  if (!botar.length) return;
+  const attacker = botar[Math.floor(Math.random()*botar.length)];
+  const atkW = Math.max(1, Math.floor((attacker.warriors||5) * 0.4));
+  addLog(`${attacker.icon} ${attacker.name} angriper i nattens mørke med ${atkW} krigere!`, 'info');
+  doInvasion(attacker.name, atkW);
+}
+function doInvasion(attackerName, atkWarriors) {
+  const myW = S.r.warriors;
+  const myStr = myW * (S.buildings.tower?1.4:1.0);
+  const win = myStr >= atkWarriors * 0.8;
+  const casualties = Math.floor(Math.min(myW, atkWarriors)*0.3);
+
+  if (win) {
+    const loot=0;
+    chg('honour',3); chg('warriors',-casualties);
+    addLog(`✅ Forsvar vant mot ${attackerName}! -${casualties}⚔ falt, +3✦`, 'win');
+    addEventCard({ type:'urgent', icon:'⚔️', title:`Angrepet avverget! — ${attackerName}`,
+      desc:`Fienden ble slått tilbake. ${casualties} av dine menn falt, men æren er spart. +3 ære.`,
+      choices:[{label:'Forfølg fienden', fn:()=>{ chg('honour',2); tk('Forfulgt! +2✦'); }},{label:'Hold stillingen', fn:()=>tk('Klok beslutning.')}]
+    });
+  } else {
+    const plunder=Math.floor(S.r.silver*0.2)+5;
+    chg('silver',-plunder); chg('warriors',-casualties); chg('honour',-2);
+    addLog(`❌ Nederlaget! ${attackerName} plyndret ${plunder}🪙. -${casualties}⚔ -2✦`, 'loss');
+    addEventCard({ type:'urgent', icon:'🔥', title:`Plyndret av ${attackerName}!`,
+      desc:`Fienden stakk av med ${plunder} sølv. ${casualties} menn falt. Ære synker. Hevn?`,
+      choices:[{label:'Planlegg hevnraid', fn:()=>{ switchMainTab('kamp'); tk('Gå til Kamp & Raid'); }},{label:'Gjenoppbygg', fn:()=>tk('Konsentrer om gjenoppbygging.')}]
+    });
+  }
+  S.ragnarok=Math.min(100,S.ragnarok+3);
+  updAll();
+}
+
+// ════════════════════════════════════════════
+// RAID (spiller angriper)
+// ════════════════════════════════════════════
+async function sendRaid(jarlId, warriors) {
+  if (warriors<1||warriors>S.r.warriors) { tk('Ugyldig antall!'); return; }
+  if (S.raidInFlight) { tk('Eit raid er allereie i gang!'); return; }
+
+  // Finn jarl i cache (fungerer for både botar og ekte spelarar)
+  let j = S.jarls.find(x=>x.id===jarlId);
+
+  // Viss ikkje i cache — hent frå Supabase (ekte spelar)
+  if (!j) {
+    const { data } = await sb.from('jarlar').select('id, jarlnamn, er_bot').eq('id', jarlId).single();
+    if (!data) { tk('Jarl ikkje funne!'); return; }
+    j = { id: data.id, name: data.jarlnamn, icon: '🦅', warriors: 5, silver: 10, honour: 10, relation: 'nøytral', er_bot: data.er_bot };
+    S.jarls.push(j); // legg til i cache
+  }
+
+  S.r.warriors -= warriors;
+  S.raidInFlight = { target: jarlId, targetName: j.name, warriors, arriveTick: S.tick + 2 };
+
+  // Lagre raid til Supabase
+  if (MIN_JARL) {
+    await sb.from('raid').insert({
+      angriper_id:  MIN_JARL.id,
+      forsvarer_id: jarlId,
+      krigere_sendt: warriors,
+      avreise_tick:  S.tick,
+      ankomst_tick:  S.tick + 2
+    });
+  }
+
+  addLog(`🚢 Raid mot ${j.name} sendt. ${warriors} krigere. Ankommer om 2 ticks.`, 'info');
+  tk(`Raid sendt! ${warriors} menn mot ${j.name}.`);
+  document.getElementById('map-ship').style.display='';
+  lagreRessursar();
+  updKampPanel();
+  updHeader();
+}
+
+async function resolveRaid() {
+  const raid = S.raidInFlight;
+  S.raidInFlight = null;
+  document.getElementById('map-ship').style.display='none';
+
+  const jarlNamn = raid.targetName || 'ukjent jarl';
+
+  // Hent forsvararens ressursar frå Supabase
+  let foeWarriors = 5;
+  let foeSilver   = 10;
+  const { data: foeRes } = await sb.from('ressursar').select('krigere, sølv').eq('jarl_id', raid.target).single();
+  if (foeRes) { foeWarriors = foeRes.krigere || 5; foeSilver = foeRes['sølv'] || 10; }
+
+  // Sjekk om forsvarar har vakttårn
+  const { data: foeBygn } = await sb.from('bygningar')
+    .select('bygning_id').eq('jarl_id', raid.target).eq('bygning_id','tower').eq('under_bygging', false);
+  const hasTower = foeBygn && foeBygn.length > 0;
+
+  const myStr  = raid.warriors * (1 + S.r.honour * 0.01);
+  const foeStr = foeWarriors  * (hasTower ? 1.4 : 1.0) * 0.6;
+  const win    = myStr > foeStr;
+  const casualties = Math.floor(raid.warriors * (win ? 0.2 : 0.5));
+  const returnW    = Math.max(0, raid.warriors - casualties);
+  S.r.warriors += returnW;
+
+  if (win) {
+    const loot = Math.floor(foeSilver * 0.3) + 5;
+    chg('silver', loot); chg('honour', 3);
+
+    // Trekk sølv frå forsvarar i Supabase
+    await sb.from('ressursar').update({
+      'sølv':   Math.max(0, foeSilver - loot),
+      krigere:  Math.max(0, foeWarriors - Math.floor(casualties * 0.3)),
+      oppdatert: new Date().toISOString()
+    }).eq('jarl_id', raid.target);
+
+    // Oppdater raid-rad
+    await sb.from('raid').update({ løyst: true, utfall: 'seier', bytte: loot, tap_angriper: casualties })
+      .eq('angriper_id', MIN_JARL.id).eq('løyst', false);
+
+    addLog(`✅ Raid mot ${jarlNamn}: Seier! +${loot}🪙 +3✦. Heimvendt: ${returnW}⚔`, 'win');
+    addEventCard({ type:'divine', icon:'⚔️', title:`Raid vunne — ${jarlNamn} plyndra!`,
+      desc:`Mennene dine kom tilbake med ${loot} sølv. ${casualties} falt. Æren stig.`,
+      choices:[{label:'Feir seieren', fn:()=>{ chg('mead',-3); chg('honour',1); tk('Hurra!'); }}]
+    });
+
+    // Oppdater lokal cache
+    const jc = S.jarls.find(x=>x.id===raid.target);
+    if (jc) { jc.silver = Math.max(0, jc.silver-loot); jc.relation = 'fiende'; }
+
+  } else {
+    chg('honour', -2);
+
+    await sb.from('raid').update({ løyst: true, utfall: 'tap', tap_angriper: casualties })
+      .eq('angriper_id', MIN_JARL.id).eq('løyst', false);
+
+    addLog(`❌ Raid mot ${jarlNamn}: Tap! Heimvendt: ${returnW}⚔ -2✦`, 'loss');
+    addEventCard({ type:'urgent', icon:'💀', title:`Raid mislykkast mot ${jarlNamn}`,
+      desc:`${casualties} menn falt. Ingen bytte. Æren søkk.`,
+      choices:[{label:'Griev dei falne', fn:()=>{ chg('honour',1); tk('+1✦ for å hedre dei falne.'); }}]
+    });
+  }
+  updAll();
+}
+
+// ════════════════════════════════════════════
+// BYGGING
+// ════════════════════════════════════════════
+async function tryBuild(id) {
+  const b=BLDGS.find(x=>x.id===id);
+  if (!b||S.buildings[id]||S.inProgress[id]) return;
+  if (S.tick<b.unlockTick) { tk(`Krever tick ${b.unlockTick}+`); return; }
+  for (const [res,amt] of Object.entries(b.cost)) {
+    if ((S.r[res]||0)<amt) { tk(`Trenger ${amt} ${res}`); return; }
+  }
+  for (const [res,amt] of Object.entries(b.cost)) S.r[res]-=amt;
+
+  if (b.buildTicks>0) {
+    S.inProgress[id]=b.buildTicks;
+    tk(`🏗 ${b.name} påbegynt — ferdig om ${b.buildTicks} ticks`);
+    // Skriv til Supabase som under_bygging
+    await sb.from('bygningar').upsert({
+      jarl_id:       MIN_JARL.id,
+      bygning_id:    id,
+      niva:          0,
+      under_bygging: true,
+      ferdig_tick:   S.tick + b.buildTicks
+    }, { onConflict: 'jarl_id,bygning_id' });
+  } else {
+    S.buildings[id]=true;
+    tk(`✅ ${b.name} bygget!`);
+    updCity();
+    // Skriv til Supabase som ferdigbygd
+    await sb.from('bygningar').upsert({
+      jarl_id:       MIN_JARL.id,
+      bygning_id:    id,
+      niva:          1,
+      under_bygging: false,
+      ferdig_tick:   null
+    }, { onConflict: 'jarl_id,bygning_id' });
+  }
+  lagreRessursar();
+  updAll();
+}
+
+// ════════════════════════════════════════════
+// REKRUTTERING
+// ════════════════════════════════════════════
+function tryRecruit(id) {
+  const rec=RECRUITS.find(x=>x.id===id);
+  if (!rec) return;
+  for (const [res,amt] of Object.entries(rec.cost)) {
+    if ((S.r[res]||0)<amt) { tk(`Trenger ${amt} ${res}`); return; }
+  }
+  for (const [res,amt] of Object.entries(rec.cost)) S.r[res]-=amt;
+  for (const [res,amt] of Object.entries(rec.perUnit)) chg(res,amt);
+  if (id==='kriger') S.r.warriors++;
+  if (id==='bonde')  { S.r.population++; S.r.food+=2; }
+  if (id==='skald2') S.r.honour+=2;
+  if (id==='kjopmann') S.r.silver+=3;
+  if (id==='speider') { /* gir info om fiende */ spyReport(); }
+  tk(`✅ ${rec.name} rekruttert!`);
+  updAll();
+}
+function spyReport() {
+  const j=S.jarls[Math.floor(Math.random()*S.jarls.length)];
+  showModal(`Speiderrapport: ${j.name}`,
+    `Speider returnerer med informasjon om <b>${j.icon} ${j.name}</b>:<br><br>
+    ⚔ Krigere: <b>${j.warriors}</b><br>
+    🪙 Sølv: <b>~${j.silver}</b><br>
+    ✦ Ære: <b>${j.honour}</b><br>
+    🗺 Territorium: ${j.territory}<br><br>
+    <i>${j.relation==='fiende'?'Fiendtlig innstilt.':'Nøytral. Kan angripes uten umiddelbar blodhevn.'}</i>`,
+    [{label:'Lukk', fn:closeModal}]);
+}
+
+// ════════════════════════════════════════════
+// HANDEL
+// ════════════════════════════════════════════
+function doTrade(id) {
+  const t=TRADES.find(x=>x.id===id);
+  if (!t) return;
+  if ((S.r[t.sell]||0)<t.sellAmt) { tk(`Trenger ${t.sellAmt} ${t.sell}`); return; }
+  S.r[t.sell]-=t.sellAmt;
+  S.r[t.buy]=(S.r[t.buy]||0)+t.buyAmt;
+  tk(`Handel: +${t.buyAmt} ${t.buy}`);
+  updAll();
+}
+
+// ════════════════════════════════════════════
+// HENDELSER
+// ════════════════════════════════════════════
+function trigEvent() {
+  const pool=EVENTS.filter(e=>e.cond());
+  if (!pool.length) return;
+  addEventCard(pool[Math.floor(Math.random()*pool.length)]);
+}
+function addEventCard(ev) {
+  const list=document.getElementById('tp-hendelser');
+  const empty=list.querySelector('.empty-state');
+  if (empty) empty.remove();
+  const card=document.createElement('div');
+  card.className=`event-card ${ev.type||''}`;
+  card.dataset.evid=ev.id||('ev'+Date.now());
+  const actHtml=(ev.choices||[]).map((c,i)=>
+    `<button class="btn ${i===0?'btn-primary':'btn-secondary'}" onclick="resolveEv('${card.dataset.evid}',${i})">${c.label}</button>`
+  ).join('');
+  card.innerHTML=`
+    <div class="ev-icon">${ev.icon}</div>
+    <div class="ev-body">
+      <div class="ev-title">${ev.title}</div>
+      <div class="ev-desc">${ev.desc}</div>
+      <div class="ev-actions">${actHtml}</div>
+      <div class="ev-time">${gameTime(S.tick)}</div>
+    </div>`;
+  list.prepend(card);
+  S.events.push({ ...ev, cardId:card.dataset.evid });
+  const b=document.getElementById('ev-badge');
+  b.textContent=(parseInt(b.textContent||0)||0)+1;
+  b.style.display='inline';
+}
+function resolveEv(cardId, idx) {
+  const card=document.querySelector(`[data-evid="${cardId}"]`);
+  const ev=S.events.find(e=>e.cardId===cardId);
+  if (!ev||!card) return;
+  (ev.choices||[])[idx]?.fn?.();
+  card.classList.add('resolved');
+  card.querySelector('.ev-actions').innerHTML='<span style="font-size:12px;color:var(--stone);font-style:italic">✓ Avgjort</span>';
+  const b=document.getElementById('ev-badge');
+  const n=Math.max(0,(parseInt(b.textContent)||0)-1);
+  b.textContent=n; b.style.display=n>0?'inline':'none';
+}
+
+// ════════════════════════════════════════════
+// SKJALD-TEKST
+// ════════════════════════════════════════════
+const SKJALD_LINES = [
+  ()=>S.r.honour>25?'Ditt navn synges i mead-hallene fra sør til nord, Gunnar Ravnklør. Selv Odin lener seg frem på tronen.':
+      S.r.honour<8?'Æren falmer. Menn hviske og ser vekk når du rir forbi.':'Ærens vekt bæres av de som tør handle.',
+  ()=>S.r.mead<4?'Mjødkaret er nær tomt — krigerne murrer, og lojaliteten er skjør som is i april.':
+      S.r.mead>20?'Mead-hallen summer av sang. Folket er fornøyd — foreløpig.':'Mjøden flyter, troppene er ved godt mot.',
+  ()=>S.ragnarok>60?'Jotunene samler seg i nord. Ragnaroks skygge strekker seg over Midgard — handle nå.':
+      S.ragnarok>35?'Urolige tider. Gudene er stille på en ufyselig måte.':'Verdenen er i balanse. Nyt det mens det varer.',
+  ()=>S.raidInFlight?`Dine menn er på havet — ${S.raidInFlight.warriors} krigere i storm og salt. Skjebnene er kastet.`:
+      S.r.warriors>12?'En mektig hær samler seg under ditt banner.':'Rekrutter flere menn — svakhet inviterer ulver.',
+  ()=>isNight(S.tick)?'Natten er gudenes tid. Sov trygt — men ikke for dypt.':'Dagen gryr. Hva vil du bygge av dette landet?',
+];
+function updSkjald() {
+  const fn=SKJALD_LINES[S.tick%SKJALD_LINES.length];
+  document.getElementById('skjald-speech').textContent=fn();
+}
+
+// ════════════════════════════════════════════
+// KAMP-PANEL
+// ════════════════════════════════════════════
+function updKampPanel() {
+  const panel=document.getElementById('tp-kamp');
+  const raidActive=S.raidInFlight;
+
+  let html=`<div class="combat-section">
+    <h3>Ditt rike</h3>
+    <div class="jarl-card">
+      <div class="jarl-avatar">🦅</div>
+      <div class="jarl-info">
+        <div class="jarl-n">${MIN_JARL?.jarlnamn || 'Jarlen din'}</div>
+        <div class="jarl-stats">⚔ ${S.r.warriors} krigere &nbsp;|&nbsp; 🪙 ${S.r.silver} sølv &nbsp;|&nbsp; ✦ ${S.r.honour} ære</div>
+      </div>
+    </div>
+  </div>`;
+
+  if (raidActive) {
+    const j=S.jarls.find(x=>x.id===raidActive.target);
+    html+=`<div class="combat-section">
+      <h3>⚔ Raid i gang</h3>
+      <div style="background:rgba(139,26,26,0.07);border:1px solid rgba(139,26,26,0.25);border-radius:2px;padding:10px 12px;font-size:13px">
+        <b>${raidActive.warriors} krigere</b> seiler mot <b>${raidActive.targetName || j?.name||'ukjent'}</b>.<br>
+        Ankommer: tick ${raidActive.arriveTick} (nå: ${S.tick})<br>
+        <div style="margin-top:6px;height:6px;background:rgba(139,26,26,0.15);border-radius:3px;overflow:hidden">
+          <div style="height:100%;background:var(--blood);width:${Math.min(100,((S.tick-raidActive.arriveTick+2)/2)*100)}%;transition:width 0.4s"></div>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  html+=`<div class="combat-section"><h3>Kjente jarlar</h3>`;
+  S.jarls.forEach(j=>{
+    const isF=j.relation==='fiende';
+    html+=`<div class="jarl-card ${isF?'enemy':''}">
+      <div class="jarl-avatar">${j.icon}</div>
+      <div class="jarl-info">
+        <div class="jarl-n">${j.name} <span style="font-size:10px;color:${isF?'var(--blood)':'var(--stone)'};">[${j.relation}]</span></div>
+        <div class="jarl-stats">⚔ ${j.warriors} &nbsp;|&nbsp; 🪙 ~${j.silver} &nbsp;|&nbsp; ✦ ${j.honour}</div>
+      </div>
+      <div class="jarl-actions">
+        ${!raidActive&&S.r.warriors>=2?`<button class="btn btn-danger" onclick="openRaidModal('${j.id}')">⚔ Angrip</button>`:''}
+        <button class="btn btn-secondary" onclick="tryRecruit('speider')">👁 Speid</button>
+      </div>
+    </div>`;
+  });
+  html+=`</div>`;
+  if (raidActive||S.r.warriors<2) {
+    html+=`<div style="font-size:12px;color:var(--stone);font-style:italic;padding:4px 0">${raidActive?'Venter på at raid returnerer...':'Trenger minst 2 krigere for å raide.'}</div>`;
+  }
+  panel.innerHTML=html;
+}
+
+function openRaidModal(jarlId) {
+  const j = S.jarls.find(x=>x.id===jarlId) || jarlCache.find(x=>x.id===jarlId);
+  const namn = j?.name || j?.jarlnamn || 'Ukjent jarl';
+  const maxW = S.r.warriors;
+  showModal(`Angrip ${namn}`,
+    `<div style="margin-bottom:10px;font-size:14px">
+      <b>${j?.icon||'🦅'} ${namn}</b><br>
+      Kjende styrkar: <b>${j?.warriors||'?'} krigere</b><br>
+      <span style="color:var(--stone);font-size:13px">Raiden tar 2 ticks. Du sender krigere og ventar på resultat.</span>
+    </div>
+    <div class="raid-config">
+      <label>Antal krigere å sende: <span class="raid-val" id="raid-val">3</span> / ${maxW}</label>
+      <input type="range" min="1" max="${maxW}" value="${Math.min(3,maxW)}" id="raid-slider"
+        oninput="document.getElementById('raid-val').textContent=this.value">
+      <div style="font-size:12px;color:var(--stone);margin-top:6px">
+        Jo fleire krigere, jo betre odds — men større tap ved nederlag.
+      </div>
+    </div>`,
+    [
+      {label:'⚔ Send raid', fn:()=>{ const w=parseInt(document.getElementById('raid-slider')?.value||3); sendRaid(jarlId,w); closeModal(); }},
+      {label:'Avbryt', fn:closeModal}
+    ]);
+}
+
+// ════════════════════════════════════════════
+// LOGG
+// ════════════════════════════════════════════
+function addLog(msg, cls='info') {
+  S.combatLog.unshift({ msg, cls, tick:S.tick });
+  if (S.combatLog.length>20) S.combatLog.pop();
+  updLoggPanel();
+  // sidebar
+  const sb=document.getElementById('combat-log-sidebar');
+  const el=document.createElement('div');
+  el.className=`log-entry ${cls}`;
+  el.textContent=msg;
+  sb.prepend(el);
+  if (sb.children.length>6) sb.lastChild.remove();
+}
+function updLoggPanel() {
+  const panel=document.getElementById('tp-logg');
+  if (!S.combatLog.length) { panel.innerHTML='<div class="empty-state">Ingen krigshandlinger ennå.</div>'; return; }
+  panel.innerHTML=S.combatLog.map(e=>`<div class="log-entry ${e.cls}" style="padding:5px 0;border-bottom:1px solid rgba(138,106,32,0.12);font-size:13px">[Tick ${e.tick}] ${e.msg}</div>`).join('');
+}
+
+// ════════════════════════════════════════════
+// RANGLIST
+// ════════════════════════════════════════════
+function updRankList() {
+  const meg = { id: MIN_JARL?.id, name: MIN_JARL?.jarlnamn||'Deg', icon:'🦅', honour:S.r.honour, warriors:S.r.warriors };
+  const all = [meg, ...S.jarls].sort((a,b)=>b.honour-a.honour);
+  document.getElementById('jarl-rank-list').innerHTML=all.map((j,i)=>{
+    const isMe = j.id === MIN_JARL?.id;
+    return `<div style="display:flex;align-items:center;gap:8px;padding:5px 10px;border-bottom:1px solid rgba(138,106,32,0.12);font-size:13px;${isMe?'background:rgba(200,144,10,0.07);':''}">
+      <span style="font-family:'Cinzel',serif;font-size:11px;color:var(--stone);width:16px">${i+1}.</span>
+      <span>${j.icon||'🦅'}</span>
+      <span style="flex:1;font-family:'Cinzel',serif;font-size:11px;${isMe?'color:var(--gold);font-weight:600':''}">${j.name}</span>
+      <span style="font-size:11px;color:var(--stone)">✦${j.honour}</span>
+    </div>`;
+  }).join('');
+}
+
+// ════════════════════════════════════════════
+// RAGNAROK
+// ════════════════════════════════════════════
+function updRagna() {
+  const pct=Math.min(100,S.ragnarok);
+  document.getElementById('ragna-bar').style.width=pct+'%';
+  document.getElementById('ragna-pct').textContent=Math.round(pct)+'%';
+  document.getElementById('ragna-map-text').textContent=`RAGNAROK ${Math.round(pct)}%`;
+  document.getElementById('map-ragna').setAttribute('width',(232*pct/100).toFixed(1));
+  const desc=pct<30?'Jotunene sover. Foreløpig.':pct<60?'Urolig. Gudene hvisker.':'Fenrisulven er løs. Ragnarok nærmer seg.';
+  document.getElementById('ragna-desc').textContent=desc;
+}
+
+// ════════════════════════════════════════════
+// BYVISNING
+// ════════════════════════════════════════════
+function updCity() {
+  ['longhus','mead_hall','naust','tower','forge','ship'].forEach(id=>{
+    const el=document.getElementById('b-'+id.replace('_','-'));
+    if (el) el.style.opacity=S.buildings[id]?'1':'0.12';
+  });
+  const layer=document.getElementById('people-layer');
+  layer.innerHTML='';
+  const count=Math.min(10,Math.floor(S.r.warriors));
+  const pos=[[98,128],[88,132],[108,132],[84,126],[112,126],[78,130],[118,130],[82,122],[108,122],[95,120]];
+  for (let i=0;i<count;i++) {
+    const [x,y]=pos[i]||[92+i*6,128];
+    layer.innerHTML+=`<ellipse cx="${x}" cy="${y+8}" rx="2.5" ry="1.2" fill="#3a3020" opacity="0.3"/>
+      <circle cx="${x}" cy="${y}" r="2.5" fill="#c8a070"/>
+      <line x1="${x}" y1="${y+2.5}" x2="${x}" y2="${y+9}" stroke="#6a4020" stroke-width="1.5"/>`;
+  }
+}
+
+// ════════════════════════════════════════════
+// HEADER
+// ════════════════════════════════════════════
+function updHeader() {
+  const p=prod();
+  const chips=[
+    {icon:'🪙',label:'Sølv',key:'silver',dk:p.silver},
+    {icon:'⚔️',label:'Krigere',key:'warriors',dk:p.warriors},
+    {icon:'🍺',label:'Mjød',key:'mead',dk:p.mead},
+    {icon:'✦',label:'Ære',key:'honour',dk:p.honour},
+    {icon:'🌾',label:'Mat',key:'food',dk:p.food},
+    {icon:'⛏',label:'Jern',key:'iron',dk:p.iron},
+  ];
+  document.getElementById('header-res').innerHTML=chips.map(c=>`
+    <div class="res-chip">
+      <span>${c.icon}</span>
+      <span style="font-size:10px;opacity:0.7">${c.label}</span>
+      <span class="val">${S.r[c.key]||0}</span>
+      <span class="delta ${c.dk<0?'neg':''}">${c.dk>=0?'+':''}${c.dk}</span>
+    </div>`).join('');
+}
+
+// ════════════════════════════════════════════
+// VENSTRE PANELER
+// ════════════════════════════════════════════
+function updByggPanel() {
+  let available=0;
+  document.getElementById('tp-bygg').innerHTML=BLDGS.map(b=>{
+    const built=S.buildings[b.id];
+    const inProg=S.inProgress[b.id];
+    const locked=S.tick<b.unlockTick&&!built&&!inProg;
+    const costStr=Object.entries(b.cost).map(([k,v])=>`${v}${k}`).join(' ');
+    const canAfford=!locked&&Object.entries(b.cost).every(([k,v])=>(S.r[k]||0)>=v);
+    if (!built&&!locked&&!inProg) available++;
+    let statusText='';
+    if (built)       statusText=`<span style="color:var(--forest)">✓ Bygget</span>`;
+    else if (inProg) statusText=`<span style="color:var(--gold)">🏗 ${inProg} ticks</span>`;
+    else if (locked) statusText=`<span style="color:var(--stone)">🔒 T${b.unlockTick}</span>`;
+    else if (canAfford) statusText=`<span style="color:var(--forest)">🔨 Bygg</span>`;
+    else             statusText=`<span style="color:var(--blood)">⛔ ${costStr}</span>`;
+    return `<div class="action-item ${built?'built':''} ${locked?'locked':''} ${inProg?'in-progress':''}"
+      onclick="${!built&&!locked&&!inProg?`tryBuild('${b.id}')`:''}" title="${b.desc}">
+      <div class="action-icon">${b.icon}</div>
+      <div class="action-body">
+        <div class="action-name">${b.name}</div>
+        <div class="action-desc">${b.desc}</div>
+      </div>
+      <div class="action-right">${statusText}</div>
+    </div>`;
+  }).join('');
+  const bb=document.getElementById('bygg-badge');
+  bb.textContent=available; bb.style.display=available>0?'inline':'none';
+}
+
+function updRecruitPanel() {
+  document.getElementById('tp-rekrutt').innerHTML=`
+    <div style="font-size:12px;color:var(--stone);font-style:italic;padding:4px 8px 8px">Rekrutter folk til jarldømmet. Klikk for å anskaffe én enhet.</div>
+    ${RECRUITS.map(r=>{
+      const costStr=Object.entries(r.cost).map(([k,v])=>`${v} ${k}`).join(', ');
+      const canAfford=Object.entries(r.cost).every(([k,v])=>(S.r[k]||0)>=v);
+      return `<div class="action-item ${canAfford?'':'locked'}" onclick="${canAfford?`tryRecruit('${r.id}')`:''}" title="${r.desc}">
+        <div class="action-icon">${r.icon}</div>
+        <div class="action-body">
+          <div class="action-name">${r.name}</div>
+          <div class="action-desc">${r.desc}</div>
+        </div>
+        <div class="action-right ${canAfford?'':'cost'}">${canAfford?'<span style="color:var(--forest)">+ Rekrutt</span>':`⛔ ${costStr}`}</div>
+      </div>`;
+    }).join('')}`;
+}
+
+function updHandelPanel() {
+  document.getElementById('tp-handel').innerHTML=`
+    <div style="font-size:12px;color:var(--stone);font-style:italic;padding:4px 8px 8px">Bytt ressurser. Klikk for å gjennomføre handel.</div>
+    ${TRADES.map(t=>{
+      const canAfford=(S.r[t.sell]||0)>=t.sellAmt;
+      return `<div class="action-item ${canAfford?'':'locked'}" onclick="${canAfford?`doTrade('${t.id}')`:''}" >
+        <div class="action-icon">⚖️</div>
+        <div class="action-body">
+          <div class="action-name">${t.name}</div>
+          <div class="action-desc">${t.desc}</div>
+        </div>
+        <div class="action-right ${canAfford?'ready':'cost'}">${canAfford?'Handel':'⛔'}</div>
+      </div>`;
+    }).join('')}`;
+}
+
+function updResRows() {
+  const p=prod();
+  document.getElementById('res-rows').innerHTML=`
+    <div style="font-size:10px;font-family:'Cinzel',serif;letter-spacing:2px;color:var(--stone);padding:4px 12px 2px;border-bottom:1px solid var(--parchment-deeper);background:var(--parchment-dark)">PRODUKSJON PER TICK</div>
+    ${[['🌾','Mat','food'],['🪵','Tømmer','timber'],['⛏','Jern','iron'],['👥','Befolkning','population']].map(([ic,la,key])=>`
+    <div class="res-row">
+      <span class="res-label">${ic} ${la}</span>
+      <span><span class="res-val">${S.r[key]||0}</span>
+      <span class="res-d ${(p[key]||0)<0?'neg':''}">&nbsp;${(p[key]||0)>=0?'+':''}${p[key]||0}/t</span></span>
+    </div>`).join('')}`;
+}
+
+// ════════════════════════════════════════════
+// MODAL
+// ════════════════════════════════════════════
+function showModal(title, body, btns) {
+  document.getElementById('modal-title').textContent=title;
+  document.getElementById('modal-body').innerHTML=body;
+  document.getElementById('modal-footer').innerHTML=btns.map((b,i)=>
+    `<button class="btn ${i===0?'btn-primary':'btn-secondary'}" id="mb${i}">${b.label}</button>`
+  ).join('');
+  btns.forEach((b,i)=>document.getElementById('mb'+i).onclick=b.fn);
+  document.getElementById('modal-bg').classList.add('show');
+}
+function closeModal() { document.getElementById('modal-bg').classList.remove('show'); }
+document.getElementById('modal-bg').onclick=e=>{ if(e.target===document.getElementById('modal-bg'))closeModal(); };
+
+// ════════════════════════════════════════════
+// TABS
+// ════════════════════════════════════════════
+function switchLeftTab(id) {
+  ['bygg','rekrutt','handel'].forEach(t=>{
+    document.getElementById('lt-'+t).classList.toggle('active',t===id);
+    document.getElementById('tp-'+t).classList.toggle('active',t===id);
+  });
+}
+function switchMainTab(id) {
+  ['hendelser','kamp','jarlar','logg'].forEach(t=>{
+    document.getElementById('mt-'+t).classList.toggle('active',t===id);
+    document.getElementById('tp-'+t).classList.toggle('active',t===id);
+  });
+  if (id==='kamp')   updKampPanel();
+  if (id==='logg')   updLoggPanel();
+  if (id==='jarlar') updJarlarPanel();
+}
+
+// ════════════════════════════════════════════
+// JARLAR-PANEL
+// ════════════════════════════════════════════
+let jarlCache = [];
+
+async function updJarlarPanel() {
+  const panel = document.getElementById('tp-jarlar');
+  panel.innerHTML = `
+    <div style="padding:10px 12px 6px;display:flex;gap:8px;align-items:center;border-bottom:1px solid var(--parchment-deeper)">
+      <input type="text" id="jarl-search" placeholder="Søk etter jarlnamn..." oninput="filtrerJarlar()"
+        style="flex:1;padding:7px 10px;border:1px solid var(--parchment-deeper);border-radius:2px;font-family:'Crimson Text',serif;font-size:14px;background:rgba(255,255,255,0.6);color:var(--ink)"/>
+      <button class="btn btn-secondary" onclick="lastJarlar()">↻ Oppdater</button>
+    </div>
+    <div id="jarl-list-wrap" style="padding:8px 10px"></div>`;
+  await lastJarlar();
+}
+
+async function lastJarlar() {
+  const wrap = document.getElementById('jarl-list-wrap');
+  if (!wrap) return;
+  wrap.innerHTML = '<div class="empty-state">Laster jarlar...</div>';
+
+  const { data: jarlar, error } = await sb
+    .from('jarlar')
+    .select('id, jarlnamn, er_bot, sist_aktiv')
+    .order('jarlnamn');
+
+  if (error || !jarlar) { wrap.innerHTML = '<div class="empty-state">Kunne ikkje laste jarlar.</div>'; return; }
+
+  // Hent ressursar for alle
+  const { data: alleRes } = await sb.from('ressursar').select('jarl_id, ære, krigere');
+
+  jarlCache = jarlar.map(j => {
+    const r = alleRes?.find(x => x.jarl_id === j.id) || {};
+    return { ...j, ære: r['ære'] || 0, krigere: r.krigere || 0 };
+  });
+
+  visJarlar(jarlCache);
+}
+
+function filtrerJarlar() {
+  const q = document.getElementById('jarl-search')?.value?.toLowerCase() || '';
+  const filtrert = q ? jarlCache.filter(j => j.jarlnamn.toLowerCase().includes(q)) : jarlCache;
+  visJarlar(filtrert);
+}
+
+function visJarlar(jarlar) {
+  const wrap = document.getElementById('jarl-list-wrap');
+  if (!wrap) return;
+
+  if (!jarlar.length) { wrap.innerHTML = '<div class="empty-state">Ingen jarlar funne.</div>'; return; }
+
+  const sortert = [...jarlar].sort((a,b) => b.ære - a.ære);
+
+  wrap.innerHTML = sortert.map((j, i) => {
+    const erMeg   = j.id === MIN_JARL?.id;
+    const aktivMs = new Date() - new Date(j.sist_aktiv);
+    const aktivStr = aktivMs < 60000*5 ? '🟢 Aktiv' : aktivMs < 3600000 ? '🟡 Nyleg' : '⚫ Inaktiv';
+
+    return `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;margin-bottom:5px;
+      border:1px solid ${erMeg ? 'var(--gold)' : 'var(--parchment-deeper)'};
+      border-radius:2px;background:${erMeg ? 'rgba(200,144,10,0.06)' : 'rgba(255,255,255,0.35)'};
+      font-size:13px;cursor:pointer" onclick="visJarlDetalj('${j.id}')">
+      <span style="font-family:'Cinzel',serif;font-size:11px;color:var(--stone);width:20px">${i+1}.</span>
+      <span style="flex:1">
+        <span style="font-family:'Cinzel',serif;font-size:12px;font-weight:600;${erMeg?'color:var(--gold)':''}">${j.jarlnamn}</span>
+        ${erMeg ? ' <span style="font-size:10px;color:var(--gold)">(deg)</span>' : ''}
+        <br><span style="font-size:11px;color:var(--stone)">${aktivStr}</span>
+      </span>
+      <span style="text-align:right;font-size:12px;color:var(--stone)">
+        ✦ ${j.ære} &nbsp; ⚔ ${j.krigere}
+      </span>
+    </div>`;
+  }).join('');
+}
+
+async function visJarlDetalj(jarlId) {
+  const j = jarlCache.find(x => x.id === jarlId);
+  if (!j) return;
+  const erMeg = j.id === MIN_JARL?.id;
+
+  const raidKnapp = (!erMeg && !S.raidInFlight && S.r.warriors >= 2)
+    ? `<br><br><label style="font-family:'Cinzel',serif;font-size:11px;color:var(--stone)">
+        KRIGERE Å SENDE: <span id="dj-val" style="color:var(--blood);font-weight:600">3</span> / ${S.r.warriors}
+       </label>
+       <input type="range" min="1" max="${S.r.warriors}" value="3" style="width:100%;accent-color:var(--blood);margin-top:4px"
+         oninput="document.getElementById('dj-val').textContent=this.value" id="dj-slider">`
+    : '';
+
+  const knappar = erMeg
+    ? [{ label: 'Lukk', fn: closeModal }]
+    : [
+        { label: '⚔ Send raid', fn: () => {
+            const w = parseInt(document.getElementById('dj-slider')?.value || 3);
+            sendRaid(jarlId, w);
+            closeModal();
+          }
+        },
+        { label: 'Lukk', fn: closeModal }
+      ];
+
+  showModal(
+    `${j.jarlnamn}`,
+    `<div style="font-size:14px;line-height:2">
+      ✦ Ære: <b>${j.ære}</b><br>
+      ⚔ Krigere: <b>${j.krigere}</b><br>
+      📍 Status: ${new Date() - new Date(j.sist_aktiv) < 300000 ? 'Aktiv no' : 'Sist sett nyleg'}
+      ${erMeg ? '<br><br><i>Dette er ditt eige jarldøme.</i>' : raidKnapp}
+    </div>`,
+    knappar
+  );
+}
+
+// ════════════════════════════════════════════
+// SAMLET UPDATE
+// ════════════════════════════════════════════
+function updAll() {
+  updHeader(); updResRows(); updByggPanel(); updRecruitPanel(); updHandelPanel();
+  updCity(); updRagna(); updRankList(); updKampPanel();
+}
+
+// ════════════════════════════════════════════
+// INIT — handtert av startSpel() etter innlogging
+// ════════════════════════════════════════════
+</script>
+</body>
+</html>
