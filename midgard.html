@@ -171,14 +171,14 @@ body{background:#0d0a06;color:var(--ink);font-family:'Crimson Text',Georgia,seri
 .ragna-wrap{padding:5px 13px 9px;}
 .ragna-lbl{font-family:'Cinzel',serif;font-size:9px;letter-spacing:2px;color:var(--blood);text-transform:uppercase;margin-bottom:3px;display:flex;justify-content:space-between;}
 .ragna-track{height:7px;background:rgba(139,26,26,.15);border:1px solid rgba(139,26,26,.3);border-radius:1px;overflow:hidden;}
-.ragna-fill{height:100%;background:linear-gradient(90deg,var(--blood),#cc0000);border-radius:1px;transition:width .6s;}
+.ragna-fill{height:100%;background:linear-gradient(90deg,var(--blood),#cc0000);border-radius:1px;transition:width .6s,background .6s;}
 .ragna-desc{font-size:11px;color:var(--stone);margin-top:3px;font-style:italic;}
-.rank-row{display:flex;align-items:center;gap:7px;padding:4px 12px;border-bottom:1px solid rgba(138,106,32,.12);font-size:13px;}
-.rank-row.me{background:rgba(200,144,10,.07);}
-.rank-n{font-family:'Cinzel',serif;font-size:10px;}
+.rank-row{display:flex;align-items:center;gap:7px;padding:5px 12px;border-bottom:1px solid rgba(138,106,32,.12);font-size:13px;background:var(--parchment);}
+.rank-row.me{background:rgba(200,144,10,.1);border-left:2px solid var(--gold);}
+.rank-n{font-family:'Cinzel',serif;font-size:11px;color:var(--ink);}
 .combat-log-sb{padding:4px 13px 8px;}
-.log-e{font-size:12px;color:var(--stone);padding:2px 0;border-bottom:1px solid rgba(138,106,32,.1);font-style:italic;}
-.log-e.win{color:var(--forest);} .log-e.loss{color:var(--blood);} .log-e.info{color:var(--rune-blue);}
+.log-e{font-size:12px;color:var(--stone);padding:3px 0;border-bottom:1px solid rgba(138,106,32,.12);font-style:italic;line-height:1.4;}
+.log-e.win{color:#1a4a1a;font-style:normal;} .log-e.loss{color:#6a1010;font-style:normal;} .log-e.info{color:#1a3a5a;font-style:normal;}
 
 /* ── BUTTONS ── */
 .btn{font-family:'Cinzel',serif;font-size:10px;letter-spacing:1px;padding:5px 11px;border:1px solid;cursor:pointer;transition:all .15s;border-radius:2px;text-transform:uppercase;white-space:nowrap;}
@@ -797,15 +797,26 @@ function tvingHendelse(){
 // PRODUKSJON PER TICK
 // ══════════════════════════════════════════════
 function prodForRes(r,bygn){
+  // r kan ha norske nøklar (frå Supabase) eller engelske (frå S.r)
+  // Normaliser til engelske for intern bruk
+  const silver  = r.silver  ?? r['sølv']    ?? 10;
+  const mead    = r.mead    ?? r['mjød']    ?? 12;
+  const food    = r.food    ?? r.mat        ?? 20;
+  const timber  = r.timber  ?? r['tømmer']  ?? 8;
+  const iron    = r.iron    ?? r.jern       ?? 3;
+  const warriors= r.warriors?? r.krigere    ?? 5;
+  const honour  = r.honour  ?? r['ære']     ?? 12;
+  const hamingja= r.hamingja?? 50;
+
   const har=id=>bygn.some(b=>b.bygning_id===id&&b.niva>0&&!b.under_bygging);
-  let p={silver:2+Math.floor((Math.random()-.5)*3),mead:-1,food:3-Math.ceil((r.krigere||5)*.3),timber:2,iron:1,honour:0,warriors:0,hamingja:0};
+  let p={silver:2+Math.floor((Math.random()-.5)*3),mead:-1,food:3-Math.ceil(warriors*.3),timber:2,iron:1,honour:0,warriors:0,hamingja:0};
   if(har('mead_hall')){p.silver+=4;p.mead+=3;p.honour+=1;}
   if(har('naust')){p.silver+=2;}
   if(har('tower')){p.honour+=1;}
   if(har('forge')){p.iron+=2;p.timber-=1;}
   if(har('ship')){p.silver+=6;p.mead-=2;}
-  if((r['mjød']||12)<=0){p.warriors-=1;p.honour-=1;p.hamingja-=2;}
-  if((r.mat||20)<=0){p.warriors-=1;}
+  if(mead<=0){p.warriors-=1;p.honour-=1;p.hamingja-=2;}
+  if(food<=0){p.warriors-=1;}
   return p;
 }
 
@@ -872,9 +883,14 @@ async function globalTick(){
     if(resUpd.length) await sb.from('ressursar').upsert(resUpd,{onConflict:'jarl_id'});
     if(bygnUpd.length) await sb.from('bygningar').upsert(bygnUpd,{onConflict:'id'});
 
-    // Raid som ankommer
+    // Raid som ankommer — marker løyst FØR vi prosesserer for å hindre dobbelkøyring
     const {data:aktiveRaid}=await sb.from('raid').select('*').eq('løyst',false).lte('ankomst_tick',nyTick);
+    const prosessertRaid=new Set();
     for(const raid of (aktiveRaid||[])){
+      if(prosessertRaid.has(raid.id)) continue;
+      prosessertRaid.add(raid.id);
+      // Marker som løyst i DB FØRST
+      await sb.from('raid').update({løyst:true}).eq('id',raid.id);
       if(raid.angriper_id===MIN_JARL?.id) await løysRaidFraTick(raid,alleRes,alleBygn,nyTick);
     }
 
@@ -923,12 +939,12 @@ async function løysRaidFraTick(raid,alleRes,alleBygn,nyTick){
     const loot=Math.floor((foeRes['sølv']||10)*.3)+5;
     S.r.silver+=loot; S.r.honour+=3;
     await sb.from('ressursar').update({'sølv':Math.max(0,(foeRes['sølv']||10)-loot),krigere:Math.max(0,(foeRes.krigere||5)-Math.floor(casualties*.3)),oppdatert:new Date().toISOString()}).eq('jarl_id',raid.forsvarer_id);
-    await sb.from('raid').update({løyst:true,utfall:'seier',bytte:loot,tap_angriper:casualties}).eq('id',raid.id);
+    await sb.from('raid').update({utfall:'seier',bytte:loot,tap_angriper:casualties}).eq('id',raid.id);
     addLog(`✅ Raid mot ${jarlNamn}: Seier! +${loot}🪙 +3✦. Heimvendt: ${returnW}⚔`,'win');
     addEvCard({type:'divine',icon:'⚔️',title:`Raid vunne — ${jarlNamn} plyndra!`,desc:`${returnW} menn heimvende med ${loot} sølv. ${casualties} falt.`,choices:[{label:'Feir!',fn:()=>{chg('mead',-3);chg('honour',1);tk('Hurra!')}}]});
   } else {
     S.r.honour=Math.max(0,S.r.honour-2);
-    await sb.from('raid').update({løyst:true,utfall:'tap',tap_angriper:casualties}).eq('id',raid.id);
+    await sb.from('raid').update({utfall:'tap',tap_angriper:casualties}).eq('id',raid.id);
     addLog(`❌ Raid mot ${jarlNamn}: Tap! Heimvendt: ${returnW}⚔ -2✦`,'loss');
     addEvCard({type:'urgent',icon:'💀',title:`Raid mislykkast mot ${jarlNamn}`,desc:`${casualties} menn falt. Ingen bytte.`,choices:[{label:'Griev dei falne',fn:()=>{chg('honour',1);tk('+1✦')}}]});
   }
@@ -1046,12 +1062,24 @@ function isNight(tick){ return tick%6===5; }
 // BYGGVERK
 // ══════════════════════════════════════════════
 const BLDGS=[
-  {id:'longhus',  name:'Langhus',   icon:'🏠',cost:{},                         desc:'Startbygning.',              unlockTick:0, buildTicks:0},
-  {id:'mead_hall',name:'Mead Hall', icon:'🍺',cost:{timber:10,silver:15},       desc:'+4🪙 +3🍺 +1✦/tick',       unlockTick:2, buildTicks:2},
-  {id:'naust',    name:'Naust',     icon:'⛵',cost:{timber:8,iron:4},            desc:'+2🪙/tick. Låser opp skip.',unlockTick:4, buildTicks:2},
-  {id:'tower',    name:'Vakttårn',  icon:'🗼',cost:{timber:6,iron:8},            desc:'+1✦/tick. Forsvarsbonns.', unlockTick:6, buildTicks:3},
-  {id:'forge',    name:'Smie',      icon:'⚒',cost:{timber:5,silver:10},         desc:'+2⛏/tick.',                unlockTick:3, buildTicks:2},
-  {id:'ship',     name:'Langskip',  icon:'🚢',cost:{timber:15,iron:8,silver:20},desc:'+6🪙/tick. Krev naust.',    unlockTick:999,buildTicks:3},
+  {id:'longhus',  name:'Langhus',   icon:'🏠',cost:{},                          unlockTick:0, buildTicks:0,
+   desc:'Startbygning. Gir tak over hovudet og tiltrekk folk.',
+   prodDesc:'Ingen passiv produksjon.'},
+  {id:'mead_hall',name:'Mead Hall', icon:'🍺',cost:{timber:10,silver:15},        unlockTick:2, buildTicks:2,
+   desc:'Mead Hall er hjartet i jarldømet — skalder syng, krigarar samlar seg.',
+   prodDesc:'+4 sølv  +3 mjød  +1 ære per tick'},
+  {id:'naust',    name:'Naust',     icon:'⛵',cost:{timber:8,iron:4},             unlockTick:4, buildTicks:2,
+   desc:'Naust ved sjøen. Nødvendig for å byggje langskip og drive sjøhandel.',
+   prodDesc:'+2 sølv per tick  •  Låser opp Langskip'},
+  {id:'tower',    name:'Vakttårn',  icon:'🗼',cost:{timber:6,iron:8},             unlockTick:6, buildTicks:3,
+   desc:'Vaktpostar held auge med havet. Gir forsvarsbonns (+40%) ved angrep.',
+   prodDesc:'+1 ære per tick  •  +40% forsvar i kamp'},
+  {id:'forge',    name:'Smie',      icon:'⚒',cost:{timber:5,silver:10},          unlockTick:3, buildTicks:2,
+   desc:'Smia produserer jern til bygg og våpen.',
+   prodDesc:'+2 jern per tick  (kostar -1 tømmer/tick)'},
+  {id:'ship',     name:'Langskip',  icon:'🚢',cost:{timber:15,iron:8,silver:20}, unlockTick:999,buildTicks:3,
+   desc:'Langskipet er jarldømet sitt mektigaste verktøy — handel, plyndring og makt.',
+   prodDesc:'+6 sølv per tick  (kostar -2 mjød/tick)'},
 ];
 
 async function tryBuild(id){
@@ -1075,11 +1103,26 @@ async function tryBuild(id){
 // REKRUTTERING
 // ══════════════════════════════════════════════
 const RECRUITS=[
-  {id:'kriger',  name:'Kriger',   icon:'⚔️',cost:{silver:8,mead:2},  desc:'Sterk i kamp. Krev mat og mjød.',fn:()=>{S.r.warriors++;   }},
-  {id:'bonde',   name:'Bonde',    icon:'🌾',cost:{silver:3},          desc:'Produserer mat. Dårleg i kamp.', fn:()=>{S.r.bonder++;S.r.food+=2;}},
-  {id:'skald2',  name:'Skald',    icon:'📜',cost:{silver:12,mead:3},  desc:'+2✦ straks. Syng om deg.',       fn:()=>{S.r.skald++;chg('honour',2);}},
-  {id:'kjopmann',name:'Kjøpmann', icon:'⚓',cost:{silver:6},          desc:'+3🪙 straks.',                   fn:()=>{S.r.kjopmann++;chg('silver',3);}},
-  {id:'speider', name:'Speider',  icon:'👁',cost:{silver:5,food:3},   desc:'Avslører fiendestyrke.',         fn:()=>spyReport()},
+  {id:'kriger',  name:'Kriger',   icon:'⚔️',cost:{silver:8,mead:2},
+   desc:'Ein krigar til hæren din. Krigarar brukast i raid og forsvar. Krev mat og mjød kvar tick — for mange krigarar tærar på forsyningane.',
+   effekt:'+1 krigar',
+   fn:()=>{S.r.warriors++;}},
+  {id:'bonde',   name:'Bonde',    icon:'🌾',cost:{silver:3},
+   desc:'Bonden dyrkar jorda og held folk mette. Gir +2 mat straks og aukar matkapasiteten.',
+   effekt:'+2 mat (eingong)',
+   fn:()=>{S.r.bonder++;S.r.food+=2;}},
+  {id:'skald2',  name:'Skald',    icon:'📜',cost:{silver:12,mead:3},
+   desc:'Skalden syng om dine bragder og spreier ryktet ditt. Gir ære straks — di meir ære, di betre jarlar du tiltrekker deg.',
+   effekt:'+2 ære (eingong)',
+   fn:()=>{S.r.skald++;chg('honour',2);}},
+  {id:'kjopmann',name:'Kjøpmann', icon:'⚓',cost:{silver:6},
+   desc:'Kjøpmannen dreg ut på handelsferd og returnerer med forteneste. Ein eingongsutbetaling — ikkje passiv inntekt.',
+   effekt:'+3 sølv (eingong)',
+   fn:()=>{S.r.kjopmann++;chg('silver',3);}},
+  {id:'speider', name:'Speider',  icon:'👁',cost:{silver:5,food:3},
+   desc:'Speidaren snik seg inn i fiendeland og rapporterer tilbake om styrkane til ein tilfeldig jarl.',
+   effekt:'Avslører fiendestyrke',
+   fn:()=>spyReport()},
 ];
 
 function tryRecruit(id){
@@ -1243,15 +1286,19 @@ function openRaidModal(jarlId){
 // LOGG
 // ══════════════════════════════════════════════
 function addLog(msg,cls='info'){
-  S.combatLog.unshift({msg,cls,tick:S.tick});
+  // Byt ut emoji med leselige tekstprefiks
+  const prefix=cls==='win'?'[SEIER] ':cls==='loss'?'[TAP] ':'';
+  const reinska=msg.replace(/^[✅❌🚢🛡🔥💀⚔️]+\s*/,'');
+  const vis=prefix+reinska;
+  S.combatLog.unshift({msg:vis,cls,tick:S.tick});
   if(S.combatLog.length>20) S.combatLog.pop();
   updLoggPanel();
   const sb2=document.getElementById('log-sb');
   const el=document.createElement('div');
-  el.className=`log-e ${cls}`; el.textContent=msg;
+  el.className=`log-e ${cls}`; el.textContent=vis;
   sb2.prepend(el);
   if(sb2.children.length>6) sb2.lastChild.remove();
-  oppdaterDevDev(msg,cls);
+  oppdaterDevDev(vis,cls);
 }
 function updLoggPanel(){
   const p=document.getElementById('tp-logg');
@@ -1400,11 +1447,13 @@ function updRankList(){
 // ══════════════════════════════════════════════
 function updRagna(){
   const pct=Math.min(100,S.ragnarok);
-  document.getElementById('ragna-bar').style.width=pct+'%';
+  const bar=document.getElementById('ragna-bar');
+  bar.style.width=pct+'%';
+  bar.style.background=pct<40?'linear-gradient(90deg,#2d6a2d,#4a9a4a)':pct<70?'linear-gradient(90deg,#8a6a10,#c8a020)':'linear-gradient(90deg,var(--blood),#cc0000)';
   document.getElementById('ragna-pct').textContent=Math.round(pct)+'%';
   document.getElementById('ragna-map-txt').textContent=`RAGNAROK ${Math.round(pct)}%`;
   document.getElementById('map-ragna').setAttribute('width',(232*pct/100).toFixed(1));
-  document.getElementById('ragna-desc').textContent=pct<30?'Jotunane søv. Førebels.':pct<60?'Uroleg. Gudane kviskrar.':'Fenrisulven er laus. Ragnarok nærmar seg.';
+  document.getElementById('ragna-desc').textContent=pct<30?'Jotunane søv. Førebels.':pct<40?'Litt uroleg i nord.':pct<60?'Gudane kviskrar. Jotunane vaknar.':pct<80?'Fenrisulven røyrer på seg.':'RAGNAROK ER NÆR — handle no!';
 }
 
 // ══════════════════════════════════════════════
@@ -1495,17 +1544,21 @@ function updByggPanel(){
     const locked=S.tick<b.unlockTick&&!built&&!inprog;
     const canAfford=!locked&&Object.entries(b.cost).every(([k,v])=>(S.r[k]||0)>=v);
     if(!built&&!locked&&!inprog) avail++;
-    const costStr=Object.entries(b.cost).map(([k,v])=>`${v}${k}`).join(' ')||'—';
+    const costStr=Object.entries(b.cost).map(([k,v])=>`${v} ${k}`).join(', ')||'—';
     let status='';
-    if(built)       status=`<span style="color:var(--forest);font-size:11px">✓ Bygd</span>`;
-    else if(inprog) status=`<span style="color:var(--gold);font-size:11px">🏗 ${inprog}t</span>`;
-    else if(locked) status=`<span style="color:var(--stone);font-size:11px">🔒 T${b.unlockTick}</span>`;
-    else if(canAfford) status=`<span style="color:var(--forest);font-size:11px">🔨 Bygg</span>`;
-    else status=`<span style="color:var(--blood);font-size:11px">⛔ ${costStr}</span>`;
+    if(built)          status=`<span style="color:var(--forest);font-size:11px;font-weight:600">✓ Bygd</span>`;
+    else if(inprog)    status=`<span style="color:var(--gold);font-size:11px">Byggjast: ${inprog} tick att</span>`;
+    else if(locked)    status=`<span style="color:var(--stone);font-size:11px">Låst til tick ${b.unlockTick}</span>`;
+    else if(canAfford) status=`<span style="color:var(--forest);font-size:11px;font-weight:600">Klikk for å byggje</span>`;
+    else               status=`<span style="color:var(--blood);font-size:11px">Krev: ${costStr}</span>`;
     return `<div class="ai ${built?'built':''} ${locked?'locked':''} ${inprog?'inprog':''}"
-      onclick="${!built&&!locked&&!inprog?`tryBuild('${b.id}')`:''}" title="${b.desc}">
+      onclick="${!built&&!locked&&!inprog?`tryBuild('${b.id}')`:''}" >
       <div class="ai-icon">${b.icon}</div>
-      <div class="ai-body"><div class="ai-name">${b.name}</div><div class="ai-desc">${b.desc}</div></div>
+      <div class="ai-body">
+        <div class="ai-name">${b.name}</div>
+        <div class="ai-desc">${b.desc}</div>
+        ${built||inprog?'':b.prodDesc?`<div style="font-size:11px;color:var(--rune-blue);margin-top:2px;font-weight:600">${b.prodDesc}</div>`:''}
+      </div>
       <div class="ai-right">${status}</div>
     </div>`;
   }).join('');
@@ -1515,14 +1568,20 @@ function updByggPanel(){
 
 function updRecruitPanel(){
   document.getElementById('tp-rekrutt').innerHTML=`
-    <div style="font-size:12px;color:var(--stone);font-style:italic;padding:3px 6px 7px">Klikk for å rekruttere éin eining.</div>
+    <div style="font-size:12px;color:var(--stone);font-style:italic;padding:3px 6px 7px">Klikk for å rekruttere éin eining om gongen.</div>
     ${RECRUITS.map(r=>{
       const canAfford=Object.entries(r.cost).every(([k,v])=>(S.r[k]||0)>=v);
-      const costStr=Object.entries(r.cost).map(([k,v])=>`${v} ${k}`).join(', ');
-      return `<div class="ai ${canAfford?'':'locked'}" onclick="${canAfford?`tryRecruit('${r.id}')`:''}" title="${r.desc}">
+      const costStr=Object.entries(r.cost).map(([k,v])=>`${v} ${k}`).join(' + ');
+      return `<div class="ai ${canAfford?'':'locked'}" onclick="${canAfford?`tryRecruit('${r.id}')`:''}" >
         <div class="ai-icon">${r.icon}</div>
-        <div class="ai-body"><div class="ai-name">${r.name}</div><div class="ai-desc">${r.desc}</div></div>
-        <div class="ai-right">${canAfford?'<span style="color:var(--forest);font-size:11px">+ Rekrutt</span>':`<span style="color:var(--blood);font-size:11px">⛔ ${costStr}</span>`}</div>
+        <div class="ai-body">
+          <div class="ai-name">${r.name} <span style="font-size:10px;color:var(--rune-blue);font-weight:600;margin-left:4px">${r.effekt}</span></div>
+          <div class="ai-desc">${r.desc}</div>
+        </div>
+        <div class="ai-right">${canAfford
+          ?`<span style="color:var(--forest);font-size:11px;font-weight:600">Kost: ${costStr}</span>`
+          :`<span style="color:var(--blood);font-size:11px">Treng: ${costStr}</span>`}
+        </div>
       </div>`;
     }).join('')}`;
 }
