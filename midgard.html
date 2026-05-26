@@ -1532,7 +1532,7 @@ function updHandelPanel(){
     <div style="font-size:12px;color:var(--stone);font-style:italic;padding:3px 6px 7px">Klikk for å gjennomføre handel.</div>
     ${TRADES.map(t=>{
       const canAfford=(S.r[t.sell]||0)>=t.sellAmt;
-      return `<div class="ai ${canAfford?'':'locked'}" onclick="${canAfford?`doTrade('${t.id}')':''}">
+      return `<div class="ai ${canAfford?'':'locked'}" onclick="${canAfford?'doTrade(\''+t.id+'\')'  :''}">
         <div class="ai-icon">⚖️</div>
         <div class="ai-body"><div class="ai-name">${t.name}</div><div class="ai-desc">${t.desc}</div></div>
         <div class="ai-right">${canAfford?'<span style="color:var(--forest);font-size:11px">Handel</span>':'<span style="color:var(--blood);font-size:11px">⛔</span>'}</div>
