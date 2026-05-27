@@ -633,6 +633,33 @@ async function startSpel(){
     desc:`Du er ${MIN_JARL.jarlnamn}. Klikk på bygningar og folk i venstre panel for å sjå kva dei gjer. Bygg, rekrutter og raid deg til ære.`,
     choices:[{label:'For Odin!',fn:()=>{chg('honour',1);tk('✦ Ære til Odin!')}}]
   });
+  // Sjekk ventande raid mot meg
+  await sjekkVentandeRaidMotMeg();
+}
+
+async function sjekkVentandeRaidMotMeg(){
+  if(!MIN_JARL)return;
+  const{data:raidMotMeg}=await sb.from('raid')
+    .select('*')
+    .eq('forsvarer_id',MIN_JARL.id)
+    .eq('løyst',false);
+  if(!raidMotMeg||!raidMotMeg.length)return;
+  for(const raid of raidMotMeg){
+    const ticksTil=raid.ankomst_tick-S.tick;
+    const angripar=S.jarls.find(x=>x.id===raid.angriper_id)?.name||'ein ukjend jarl';
+    if(ticksTil<=0){
+      // Allereie ankome men ikkje løyst — ventar på neste tick
+      addEvCard({type:'urgent',icon:'⚠️',title:'Fiendtleg flåte ved kysten!',
+        desc:`Ein flåte frå ${angripar} ligg utanfor hamna di med ${raid.krigere_sendt} krigerar. Dei angrip ved neste tick!`,
+        choices:[{label:'Forbered forsvar (+1 ære)',fn:()=>{chg('honour',1);tk('Menn til plass!')}}]
+      });
+    } else if(ticksTil===1){
+      addEvCard({type:'urgent',icon:'🛡',title:'Framand flåte observert!',
+        desc:`Vaktmannen rapporterer: ${raid.krigere_sendt} krigerar under framandt banner ankjem neste tick.`,
+        choices:[{label:'Forbered forsvar (+1 ære)',fn:()=>{chg('honour',1);tk('Menn til plass!')}}]
+      });
+    }
+  }
 }
 
 async function hentAlt(){
@@ -838,7 +865,24 @@ async function globalTick(){
       if(prosessert.has(raid.id))continue;
       prosessert.add(raid.id);
       await sb.from('raid').update({løyst:true}).eq('id',raid.id);
-      if(raid.angriper_id===MIN_JARL?.id)await løysRaidFraTick(raid,alleRes,alleBygn);
+      // Angriper: rekn ut seier/tap og vis resultat
+      if(raid.angriper_id===MIN_JARL?.id) await løysRaidFraTick(raid,alleRes,alleBygn);
+      // Forsvarar: vis varsel om kva som skjedde
+      if(raid.forsvarer_id===MIN_JARL?.id) await varsleForsvarar(raid,alleRes,alleBygn);
+    }
+    // Sjekk om det kjem raid mot oss i neste tick — åtvar
+    const{data:kommandeRaid}=await sb.from('raid').select('*').eq('løyst',false).eq('forsvarer_id',MIN_JARL?.id);
+    for(const r of(kommandeRaid||[])){
+      if(r.ankomst_tick===nyTick+1){
+        const angriparNamn=S.jarls.find(x=>x.id===r.angriper_id)?.name||'ein ukjend jarl';
+        addEvCard({type:'urgent',icon:'🛡',title:'Framand flåte observert!',
+          desc:`Vaktmannen rapporterer: ${r.krigere_sendt} krigerar under framandt banner er sett på havet. Dei ankjem neste tick. Kven er det?`,
+          choices:[
+            {label:'Forbered forsvar (+2 ære)',fn:()=>{chg('honour',2);tk('Menn til plass!')}},
+            {label:'Ignorer',fn:()=>tk('Du håpar det beste...')}
+          ]
+        });
+      }
     }
 
     S.tick=nyTick;S.ragnarok=nyRagna;S.tideverv=tideverv;
@@ -895,6 +939,56 @@ async function løysRaidFraTick(raid,alleRes,alleBygn){
     addEvCard({type:'urgent',icon:'💀',title:`Raid mislykkast mot ${jarlNamn}`,
       desc:`${cas} menn falt. Ingen bytte. Æren søkk med 2.`,
       choices:[{label:'Griev dei falne',fn:()=>{chg('honour',1);tk('+1 ære for å hedre dei falne.')}}]
+    });
+  }
+  lagreRessursar();
+}
+
+// ══════════════════════════════════════
+// VARSLE FORSVARAR
+// ══════════════════════════════════════
+async function varsleForsvarar(raid,alleRes,alleBygn){
+  // Rekn ut utfallet frå forsvarar-perspektiv
+  const myRes=alleRes?.find(x=>x.jarl_id===MIN_JARL?.id)||{};
+  const myBygn=alleBygn?.filter(b=>b.jarl_id===MIN_JARL?.id)||[];
+  const hasTower=myBygn.some(b=>b.bygning_id==='tower'&&b.niva>0&&!b.under_bygging);
+
+  // Finn angripar-namn
+  const angriparNamn=S.jarls.find(x=>x.id===raid.angriper_id)?.name||'ein ukjend jarl';
+
+  // Rekn ut same kamp som angriper ser
+  const myWarriors=myRes.krigere||S.r.warriors||5;
+  const myStr=myWarriors*(hasTower?1.4:1);
+  const foeStr=raid.krigere_sendt*.6;
+  const win=myStr>=foeStr*.8; // forsvarar vinn om angriper ikkje er sterk nok
+
+  if(win){
+    // Forsvarar vann — ingen ressursar tapt
+    const cas=Math.floor(Math.min(myWarriors,raid.krigere_sendt)*.15);
+    chg('warriors',-cas);
+    chg('honour',2);
+    addLog(`[FORSVAR] Angrep frå ${angriparNamn} avverja! ${cas} falt i forsvar. +2 ære.`,'win');
+    addEvCard({type:'urgent',icon:'🛡',title:`Angrep avverja — ${angriparNamn} slo til!`,
+      desc:`${angriparNamn} sende ${raid.krigere_sendt} krigerar mot deg. Forsvaret heldt! ${cas} av dine menn falt, men æren er spart. +2 ære.`,
+      choices:[
+        {label:'Planlegg hevn',fn:()=>switchMidTab('kamp')},
+        {label:'Feir forsvaret (+1 ære)',fn:()=>{chg('honour',1);tk('+1 ære')}}
+      ]
+    });
+  } else {
+    // Forsvarar tapte — ressursar rana
+    const plunder=Math.floor((myRes['sølv']||S.r.silver||10)*.3)+5;
+    const cas=Math.floor(myWarriors*.3);
+    chg('silver',-plunder);
+    chg('warriors',-cas);
+    chg('honour',-2);
+    addLog(`[FORSVAR] Plyndra av ${angriparNamn}! ${plunder} sølv rana, ${cas} falt. -2 ære.`,'loss');
+    addEvCard({type:'urgent',icon:'🔥',title:`Plyndra av ${angriparNamn}!`,
+      desc:`${angriparNamn} sende ${raid.krigere_sendt} krigerar og braut gjennom forsvaret. ${plunder} sølv er rana, ${cas} menn falt. Æren søkk med 2.`,
+      choices:[
+        {label:'Planlegg hevn',fn:()=>switchMidTab('kamp')},
+        {label:'Gjenoppbygg',fn:()=>tk('Fokus på gjenoppbygging.')}
+      ]
     });
   }
   lagreRessursar();
