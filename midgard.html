@@ -553,7 +553,27 @@ body{background:#0d0a06;color:var(--ink);font-family:'Crimson Text',Georgia,seri
           <option value="raid_warning">Angrepvarsel</option>
           <option value="vanir_offer">Vanir-tilbod</option>
         </select>
-        <button class="btn-dev btn-dev-neutral" onclick="tvingHendelse()" style="width:100%">Send til meg</button>
+        <select class="dev-select" id="dev-ev-target">
+          <option value="meg">→ Meg sjølv</option>
+        </select>
+        <button class="btn-dev btn-dev-neutral" onclick="tvingHendelse()" style="width:100%;margin-bottom:8px">Send hendelse</button>
+        <div class="dev-col-title">Gi ressursar</div>
+        <select class="dev-select" id="dev-res-target">
+          <option value="meg">→ Meg sjølv</option>
+        </select>
+        <select class="dev-select" id="dev-res-type">
+          <option value="sølv">Sølv</option>
+          <option value="mjød">Mjød</option>
+          <option value="ære">Ære</option>
+          <option value="mat">Mat</option>
+          <option value="tømmer">Tømmer</option>
+          <option value="jern">Jern</option>
+          <option value="krigere">Krigerar</option>
+        </select>
+        <div style="display:flex;gap:6px;margin-bottom:0">
+          <input type="number" id="dev-res-amt" value="50" min="1" max="999" style="width:70px;padding:5px 8px;background:rgba(255,255,255,.07);border:1px solid #2a4a6b;border-radius:2px;color:#a0c0d8;font-size:13px"/>
+          <button class="btn-dev btn-dev-neutral" onclick="giRessursar()" style="flex:1">Gi</button>
+        </div>
       </div>
     </div>
     <div>
@@ -601,6 +621,7 @@ const S={
   r:{silver:10,mead:12,honour:12,food:20,timber:8,iron:3,warriors:5,population:14,hamingja:50,bonder:3,skald:0,kjopmann:0},
   prev:{silver:10,mead:12,honour:12,food:20,timber:8,iron:3},
   buildings:{longhus:true,mead_hall:false,naust:false,tower:false,forge:false,ship:false},
+  buildingLevels:{longhus:1,mead_hall:0,naust:0,tower:0,forge:0,ship:0},
   inProgress:{},raidInFlight:null,events:[],combatLog:[],jarls:[],nextEventIn:3,kjopmannUte:false
 };
 
@@ -707,9 +728,10 @@ async function hentAlt(){
   if(bygn){
     Object.keys(S.buildings).forEach(k=>S.buildings[k]=false);
     S.buildings.longhus=true;S.inProgress={};
+    Object.keys(S.buildingLevels).forEach(k=>S.buildingLevels[k]=0);
     bygn.forEach(b=>{
       const niva=b['nivå']??b.niva??0;
-      if(niva>0&&!b.under_bygging)S.buildings[b.bygning_id]=true;
+      if(niva>0&&!b.under_bygging){S.buildings[b.bygning_id]=true;S.buildingLevels[b.bygning_id]=niva;}
       else if(b.under_bygging)S.inProgress[b.bygning_id]=b.ferdig_tick-S.tick;
     });
     if(S.buildings.naust)BLDGS.find(b=>b.id==='ship').unlockTick=0;
@@ -775,6 +797,7 @@ function oppdaterDevInfo(){
     <span>${j.icon}</span><span class="dev-jarl-name">${j.name}${j.er_bot?' 🤖':''}</span>
     <span class="dev-jarl-stats">✦${j.honour} ⚔${j.warriors} ☽${j.hamingja||'?'}</span>
   </div>`).join('');
+  oppdaterDevTargets();
 }
 function devLog(msg,cls='info'){
   const log=document.getElementById('dev-log');
@@ -803,8 +826,48 @@ async function visDevJarlDetalj(jarlId){
 }
 function tvingHendelse(){
   const type=document.getElementById('dev-ev-type').value;
+  const targetId=document.getElementById('dev-ev-target')?.value;
   const ev=EVENTS.find(e=>e.id===type);
-  if(ev){addEvCard(ev);tk('Hendelse trigga!');}
+  if(!ev)return;
+  if(!targetId||targetId==='meg'){
+    addEvCard(ev);tk('Hendelse trigga til deg!');
+  }else{
+    // Send til annan spelar via Supabase hendingar-tabell
+    sb.from('hendingar').insert({
+      jarl_id:targetId,type:ev.type||'divine',tittel:ev.title,
+      beskriving:ev.desc,ikon:ev.icon,løyst:false,tick_oppretta:S.tick
+    }).then(({error})=>{
+      if(error)tk('Feil: '+error.message);
+      else tk('Hendelse sendt til spelar!');
+    });
+  }
+}
+
+async function giRessursar(){
+  const targetId=document.getElementById('dev-res-target')?.value;
+  const resType=document.getElementById('dev-res-type')?.value;
+  const amt=parseInt(document.getElementById('dev-res-amt')?.value)||50;
+  const jarlId=(!targetId||targetId==='meg')?MIN_JARL?.id:targetId;
+  if(!jarlId){tk('Ingen jarl valt');return;}
+  const{data:r}=await sb.from('ressursar').select('*').eq('jarl_id',jarlId).single();
+  if(!r){tk('Fann ikkje ressursar');return;}
+  const nyVerdi=Math.max(0,(r[resType]||0)+amt);
+  const{error}=await sb.from('ressursar').update({[resType]:nyVerdi,oppdatert:new Date().toISOString()}).eq('jarl_id',jarlId);
+  if(error){tk('Feil: '+error.message);return;}
+  // Oppdater lokal tilstand om det er meg
+  const resMap={'sølv':'silver','mjød':'mead','ære':'honour',mat:'food','tømmer':'timber',jern:'iron',krigere:'warriors'};
+  if(jarlId===MIN_JARL?.id&&resMap[resType]){S.r[resMap[resType]]=nyVerdi;updHeader();}
+  tk(`+${amt} ${resType} gjeve!`);
+}
+
+function oppdaterDevTargets(){
+  const alle=[{id:'meg',name:'→ Meg sjølv'},...S.jarls.map(j=>({id:j.id,name:j.name+(j.er_bot?' 🤖':'')}))];
+  ['dev-ev-target','dev-res-target'].forEach(selId=>{
+    const sel=document.getElementById(selId);if(!sel)return;
+    const curr=sel.value;
+    sel.innerHTML=alle.map(j=>`<option value="${j.id}">${j.name}</option>`).join('');
+    sel.value=curr||'meg';
+  });
 }
 
 // ══ PRODUKSJON — FIKSA NØKLAR ══
@@ -818,26 +881,22 @@ function prodForRes(r,bygn){
   const warriors=r.warriors?? r.krigere   ?? 5;
   const bonder = r.bonder  ?? 3;
   const skald  = r.skald   ?? 0;
-  const har=id=>bygn.some(b=>b.bygning_id===id&&(b['nivå']??b.niva??0)>0&&!b.under_bygging);
-  // Basisproduksjon med ±15% tilfeldig variasjon
+  const nivå=id=>{const b=bygn.find(x=>x.bygning_id===id&&!x.under_bygging);return b?(b['nivå']??b.niva??0):0;};
   const rand=()=>1+(Math.random()-.5)*.3;
-  let p={
-    silver: Math.round(2*rand()),
-    mead:   -1,
-    food:   Math.round((bonder - warriors*.3)*rand()),
-    timber: Math.round(2*rand()),
-    iron:   Math.round(1*rand()),
-    honour: skald,
-    warriors:0,
-    hamingja:0
-  };
-  if(har('mead_hall')){p.silver+=4;p.mead+=3;p.honour+=1;}
-  if(har('naust'))    p.silver+=2;
-  if(har('tower'))    p.honour+=1;
-  if(har('forge'))   {p.iron+=2;p.timber-=1;}
-  if(har('ship'))    {p.silver+=6;p.mead-=2;}
-  if(mead<=0)        {p.warriors-=1;p.honour-=1;p.hamingja-=2;}
-  if(food<=0)         p.warriors-=1;
+  let p={silver:Math.round(2*rand()),mead:-1,food:Math.round((bonder-warriors*.3)*rand()),timber:Math.round(2*rand()),iron:Math.round(1*rand()),honour:skald,warriors:0,hamingja:0};
+  // Mead Hall: nivå 1=+4/+3/+1, nivå 2=+7/+5/+2, nivå 3=+11/+8/+3
+  const mh=nivå('mead_hall');
+  if(mh>=1){p.silver+=[0,4,7,11][mh];p.mead+=[0,3,5,8][mh];p.honour+=[0,1,2,3][mh];}
+  // Naust: nivå 1=+2, nivå 2=+4, nivå 3=+7
+  const na=nivå('naust');if(na>=1)p.silver+=[0,2,4,7][na];
+  // Vakttårn: nivå 1=+1, nivå 2=+2, nivå 3=+3
+  const tw=nivå('tower');if(tw>=1)p.honour+=[0,1,2,3][tw];
+  // Smie: nivå 1=+2/-1, nivå 2=+4/-2, nivå 3=+7/-3
+  const fo=nivå('forge');if(fo>=1){p.iron+=[0,2,4,7][fo];p.timber-=[0,1,2,3][fo];}
+  // Langskip: nivå 1=+6/-2, nivå 2=+10/-3, nivå 3=+16/-4
+  const sh=nivå('ship');if(sh>=1){p.silver+=[0,6,10,16][sh];p.mead-=[0,2,3,4][sh];}
+  if(mead<=0){p.warriors-=1;p.honour-=1;p.hamingja-=2;}
+  if(food<=0)p.warriors-=1;
   return p;
 }
 
@@ -878,7 +937,9 @@ async function globalTick(){
       // Ferdigstill bygningar
       for(const b of bygn){
         if(b.under_bygging&&b.ferdig_tick!==null&&nyTick>=b.ferdig_tick){
-          bygnUpd.push({id:b.id,jarl_id:j.id,bygning_id:b.bygning_id,'nivå':1,under_bygging:false,ferdig_tick:null});
+          // Finn kva nivå som er ferdig (noverande + 1)
+          const nyNivå=(b['nivå']??b.niva??0)+1;
+          bygnUpd.push({id:b.id,jarl_id:j.id,bygning_id:b.bygning_id,'nivå':nyNivå,under_bygging:false,ferdig_tick:null});
         }
       }
       const oppdBygn=bygn.map(b=>bygnUpd.find(u=>u.id===b.id)||b);
@@ -1206,53 +1267,113 @@ function isNight(tick){return tick%6===5;}
 
 // ══ BYGNINGAR ══
 const BLDGS=[
-  {id:'longhus',  name:'Langhus',  icon:'🏠',cost:{},               unlockTick:0, buildTicks:0,
-   desc:'Hjartet i jarldømet. Nødvendig for alt anna.',prod:'Ingen passiv produksjon.'},
-  {id:'mead_hall',name:'Mead Hall',icon:'🍺',cost:{timber:10,silver:15},unlockTick:2,buildTicks:2,
-   desc:'Samlingspunkt for krigarane. Høgare moral og inntekter.',prod:'+4 sølv  +3 mjød  +1 ære per tick'},
-  {id:'naust',    name:'Naust',    icon:'⛵',cost:{timber:8,iron:4},  unlockTick:4, buildTicks:2,
-   desc:'Naust ved sjøen. Nødvendig for sjøhandel og Langskip.',prod:'+2 sølv per tick  •  Låser opp Langskip'},
-  {id:'tower',    name:'Vakttårn', icon:'🗼',cost:{timber:6,iron:8},  unlockTick:6, buildTicks:3,
-   desc:'Gir tidleg åtvaring og +40% forsvarsbonns i kamp.',prod:'+1 ære per tick  •  +40% forsvar'},
-  {id:'forge',    name:'Smie',     icon:'⚒',cost:{timber:5,silver:10},unlockTick:3,buildTicks:2,
-   desc:'Produserer jern til bygningar og våpen.',prod:'+2 jern per tick  (bruker -1 tømmer/tick)'},
-  {id:'ship',     name:'Langskip', icon:'🚢',cost:{timber:15,iron:8,silver:20},unlockTick:999,buildTicks:3,
-   desc:'Det mektigaste verktøyet for handel og raid.',prod:'+6 sølv per tick  (bruker -2 mjød/tick)'},
+  {id:'longhus',  name:'Langhus',  icon:'🏠',unlockTick:0,
+   nivaar:[
+     {nivå:1,cost:{},buildTicks:0,desc:'Enkelt tak over hovudet. Gir husly til folk.',prod:'Ingen passiv produksjon.'},
+     {nivå:2,cost:{timber:12,silver:20},buildTicks:3,desc:'Eit ordentleg langhus med plass til gjester og allierte.',prod:'+1 mat per tick  •  +1 befolkning'},
+     {nivå:3,cost:{timber:24,silver:40,iron:8},buildTicks:5,desc:'Storsalen. Eit senter for makt og velstand.',prod:'+2 mat per tick  •  +2 befolkning  •  +1 ære per tick'},
+   ]},
+  {id:'mead_hall',name:'Mead Hall',icon:'🍺',unlockTick:2,
+   nivaar:[
+     {nivå:1,cost:{timber:10,silver:15},buildTicks:2,desc:'Krigarane drikk, syng og planlegg.',prod:'+4 sølv  +3 mjød  +1 ære per tick'},
+     {nivå:2,cost:{timber:18,silver:30},buildTicks:3,desc:'Ein hall verdig ein jarl. Fremmede søkjer teneste her.',prod:'+7 sølv  +5 mjød  +2 ære per tick'},
+     {nivå:3,cost:{timber:30,silver:55,iron:10},buildTicks:5,desc:'Stormenn kjem frå heile Midgard for å drikke i din hall.',prod:'+11 sølv  +8 mjød  +3 ære per tick'},
+   ]},
+  {id:'naust',    name:'Naust',    icon:'⛵',unlockTick:4,
+   nivaar:[
+     {nivå:1,cost:{timber:8,iron:4},buildTicks:2,desc:'Naust ved sjøen. Mogeleggjer sjøhandel og Langskip.',prod:'+2 sølv per tick  •  Låser opp Langskip'},
+     {nivå:2,cost:{timber:16,iron:8,silver:20},buildTicks:3,desc:'Utvida naust med plass til fleire skip.',prod:'+4 sølv per tick  •  -1 tick reisetid på raid'},
+     {nivå:3,cost:{timber:28,iron:14,silver:38},buildTicks:5,desc:'Eit fullverdig skipsverft. Skip byggjer seg raskare.',prod:'+7 sølv per tick  •  -2 tick reisetid på raid'},
+   ]},
+  {id:'tower',    name:'Vakttårn', icon:'🗼',unlockTick:6,
+   nivaar:[
+     {nivå:1,cost:{timber:6,iron:8},buildTicks:3,desc:'Gir tidleg åtvaring og forsvarsbonns.',prod:'+1 ære per tick  •  +40% forsvar i kamp'},
+     {nivå:2,cost:{timber:12,iron:16,silver:25},buildTicks:4,desc:'Høgare tårn med betre utsikt og sterkare forsvar.',prod:'+2 ære per tick  •  +60% forsvar i kamp'},
+     {nivå:3,cost:{timber:22,iron:28,silver:45},buildTicks:6,desc:'Uinntakeleg festning. Angriparar vegrar seg.',prod:'+3 ære per tick  •  +80% forsvar i kamp'},
+   ]},
+  {id:'forge',    name:'Smie',     icon:'⚒',unlockTick:3,
+   nivaar:[
+     {nivå:1,cost:{timber:5,silver:10},buildTicks:2,desc:'Produserer jern til bygningar og våpen.',prod:'+2 jern per tick  (bruker -1 tømmer/tick)'},
+     {nivå:2,cost:{timber:10,silver:22,iron:6},buildTicks:3,desc:'Større omn, meir kapasitet.',prod:'+4 jern per tick  (bruker -2 tømmer/tick)'},
+     {nivå:3,cost:{timber:18,silver:40,iron:14},buildTicks:5,desc:'Meistarsmed. Lagar dei beste våpna i Midgard.',prod:'+7 jern per tick  (bruker -3 tømmer/tick)  •  +10% kampbonns'},
+   ]},
+  {id:'ship',     name:'Langskip', icon:'🚢',unlockTick:999,
+   nivaar:[
+     {nivå:1,cost:{timber:15,iron:8,silver:20},buildTicks:3,desc:'Langskipet mogeleggjer raid og handel til fjerne land.',prod:'+6 sølv per tick  (bruker -2 mjød/tick)'},
+     {nivå:2,cost:{timber:25,iron:15,silver:38},buildTicks:4,desc:'Eit større og raskare skip med meir mannskap.',prod:'+10 sølv per tick  (bruker -3 mjød/tick)'},
+     {nivå:3,cost:{timber:40,iron:25,silver:65},buildTicks:6,desc:'Draken — det mektigaste skipet i alle farvatn.',prod:'+16 sølv per tick  (bruker -4 mjød/tick)  •  +15% raid-styrke'},
+   ]},
 ];
-async function tryBuild(id){
-  const b=BLDGS.find(x=>x.id===id);
-  if(!b||S.buildings[id]||S.inProgress[id])return;
+
+// Hjelpefunksjonar for bygningsnivå
+function getBldg(id){return BLDGS.find(b=>b.id===id);}
+function getNivåData(id,nivå){return getBldg(id)?.nivaar?.find(n=>n.nivå===nivå);}
+function getAktivtNivå(id){return S.buildingLevels[id]||0;}
+function getNesteNivå(id){const n=getAktivtNivå(id);return n<3?n+1:null;}
+async function tryBuild(id,tilNivå){
+  const b=getBldg(id);if(!b)return;
+  if(S.inProgress[id]){tk('Allereie under bygging!');return;}
   if(S.tick<b.unlockTick){tk(`Krev tick ${b.unlockTick}+`);return;}
-  for(const[res,amt]of Object.entries(b.cost))if((S.r[res]||0)<amt){tk(`Treng ${amt} ${res}`);return;}
-  for(const[res,amt]of Object.entries(b.cost))S.r[res]-=amt;
-  if(b.buildTicks>0){
-    S.inProgress[id]=b.buildTicks;
-    tk(`🏗 ${b.name} påbegynt — ferdig om ${b.buildTicks} ticks`);
-    await sb.from('bygningar').upsert({jarl_id:MIN_JARL.id,bygning_id:id,'nivå':0,under_bygging:true,ferdig_tick:S.tick+b.buildTicks},{onConflict:'jarl_id,bygning_id'});
+  const nivåData=getNivåData(id,tilNivå);if(!nivåData)return;
+  for(const[res,amt]of Object.entries(nivåData.cost))if((S.r[res]||0)<amt){tk(`Treng ${amt} ${res}`);return;}
+  for(const[res,amt]of Object.entries(nivåData.cost))S.r[res]-=amt;
+  if(nivåData.buildTicks>0){
+    S.inProgress[id]=nivåData.buildTicks;
+    tk(`🏗 ${b.name} nivå ${tilNivå} påbegynt — ferdig om ${nivåData.buildTicks} ticks`);
+    await sb.from('bygningar').upsert({jarl_id:MIN_JARL.id,bygning_id:id,'nivå':tilNivå-1,under_bygging:true,ferdig_tick:S.tick+nivåData.buildTicks},{onConflict:'jarl_id,bygning_id'});
   }else{
-    S.buildings[id]=true;tk(`✅ ${b.name} bygd!`);
-    await sb.from('bygningar').upsert({jarl_id:MIN_JARL.id,bygning_id:id,'nivå':1,under_bygging:false,ferdig_tick:null},{onConflict:'jarl_id,bygning_id'});
+    S.buildings[id]=true;S.buildingLevels[id]=tilNivå;
+    tk(`✅ ${b.name} bygd!`);
+    await sb.from('bygningar').upsert({jarl_id:MIN_JARL.id,bygning_id:id,'nivå':tilNivå,under_bygging:false,ferdig_tick:null},{onConflict:'jarl_id,bygning_id'});
   }
+  if(id==='naust')BLDGS.find(b=>b.id==='ship').unlockTick=0;
   lagreRessursar();updAll();closeModal();
 }
 function visByggModal(id){
-  const b=BLDGS.find(x=>x.id===id);if(!b)return;
-  const built=S.buildings[id],inprog=S.inProgress[id];
-  const locked=S.tick<b.unlockTick&&!built&&!inprog;
-  const costStr=Object.entries(b.cost).map(([k,v])=>`${v} ${k}`).join(' + ')||'Gratis';
-  const canAfford=!locked&&Object.entries(b.cost).every(([k,v])=>(S.r[k]||0)>=v);
-  let statusHtml='';
-  if(built)statusHtml=`<div style="color:var(--forest);font-weight:600;margin-top:10px">✓ Allereie bygd</div>`;
-  else if(inprog)statusHtml=`<div style="color:var(--gold);margin-top:10px">🏗 Under bygging — ${inprog} tick att</div>`;
-  else if(locked)statusHtml=`<div style="color:var(--stone);margin-top:10px">🔒 Tilgjengeleg frå tick ${b.unlockTick}</div>`;
+  const b=getBldg(id);if(!b)return;
+  const aktivtNivå=getAktivtNivå(id);
+  const nesteNivå=getNesteNivå(id);
+  const inprog=S.inProgress[id];
+  const locked=S.tick<b.unlockTick&&aktivtNivå===0&&!inprog;
+
+  // Vis alle nivå
+  let nivåHtml='';
+  b.nivaar.forEach(n=>{
+    const erAktiv=aktivtNivå>=n.nivå;
+    const erNeste=n.nivå===nesteNivå;
+    const erUnderBygging=inprog&&!erAktiv&&erNeste;
+    const costStr=Object.entries(n.cost).map(([k,v])=>`${v} ${k}`).join(' + ')||'Gratis';
+    const canAfford=Object.entries(n.cost).every(([k,v])=>(S.r[k]||0)>=v);
+    nivåHtml+=`<div style="border:1px solid ${erAktiv?'var(--forest)':erNeste?'var(--gold)':'var(--parchment-deeper)'};border-radius:3px;padding:10px 12px;margin-bottom:8px;background:${erAktiv?'rgba(45,74,30,.06)':erNeste?'rgba(200,144,10,.04)':'rgba(255,255,255,.3)'}">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+        <span style="font-family:'Cinzel',serif;font-size:12px;font-weight:600;color:${erAktiv?'var(--forest)':erNeste?'var(--gold)':'var(--stone)'}">
+          Nivå ${n.nivå} ${erAktiv?'✓ Bygd':erUnderBygging?'🏗 Under arbeid':''}
+        </span>
+        ${!erAktiv&&erNeste&&!erUnderBygging?`<span style="font-size:12px;color:${canAfford?'var(--forest)':'var(--blood)'}">${canAfford?'Kan byggje':'⛔ Ikkje råd'}</span>`:''}
+      </div>
+      <div style="font-size:13px;color:var(--stone);margin-bottom:4px">${n.desc}</div>
+      <div style="font-size:12px;color:var(--rune-blue);font-weight:500">📈 ${n.prod}</div>
+      ${!erAktiv&&erNeste&&!erUnderBygging?`<div style="font-size:12px;color:var(--blood);margin-top:4px">💰 Kostnad: ${costStr} • ${n.buildTicks} ticks</div>`:''}
+    </div>`;
+  });
+
+  const knappar=locked?[{label:'Lukk',fn:closeModal}]:
+    inprog?[{label:'Lukk',fn:closeModal}]:
+    nesteNivå&&!locked?
+      (() => {
+        const nd=getNivåData(id,nesteNivå);
+        const canAfford=Object.entries(nd.cost).every(([k,v])=>(S.r[k]||0)>=v);
+        return canAfford
+          ?[{label:`🔨 Oppgrader til nivå ${nesteNivå}`,fn:()=>tryBuild(id,nesteNivå)},{label:'Lukk',fn:closeModal}]
+          :[{label:'⛔ Ikkje nok ressursar',fn:closeModal}];
+      })()
+    :[{label:'Maks nivå nådd',fn:closeModal}];
+
   showModal(`${b.icon} ${b.name}`,
-    `<p style="margin-bottom:10px">${b.desc}</p>
-    <div class="modal-prod">📈 Produksjon per tick:<br><b>${b.prod}</b></div>
-    ${!built&&!inprog?`<div class="modal-cost">💰 Kostnad: <b>${costStr}</b></div>`:''}
-    ${statusHtml}`,
-    built||inprog||locked?[{label:'Lukk',fn:closeModal}]:
-    canAfford?[{label:`🔨 Bygg ${b.name}`,fn:()=>tryBuild(id)},{label:'Avbryt',fn:closeModal}]:
-    [{label:'⛔ Ikkje nok ressursar',fn:closeModal}]);
+    `<div style="font-size:12px;color:var(--stone);font-style:italic;margin-bottom:10px">
+      ${locked?`🔒 Tilgjengeleg frå tick ${b.unlockTick}`:`Aktivt nivå: <b>${aktivtNivå}</b> av 3`}
+    </div>${nivåHtml}`,
+    knappar);
 }
 
 // ══ INNBYGGARAR ══
@@ -1424,8 +1545,10 @@ function switchSubTab(id){
   filtrerHendingar();
 }
 function filtrerHendingar(){
-  const alle=document.querySelectorAll('#ev-list .ev-card');
+  const alle=document.querySelectorAll('#ev-list .ev-card, #ev-list .tick-summary');
   alle.forEach(c=>{
+    // Tick-summary skal alltid visast
+    if(c.classList.contains('tick-summary')){c.style.display='';return;}
     if(aktivSubTab==='alle'){c.style.display='';}
     else{
       const tags=(c.dataset.tags||'').split(',');
@@ -1574,14 +1697,17 @@ function updRagna(){
 
 function updByggList(){
   document.getElementById('bygg-list').innerHTML=BLDGS.map(b=>{
-    const built=S.buildings[b.id],inprog=S.inProgress[b.id];
-    const locked=S.tick<b.unlockTick&&!built&&!inprog;
+    const aktivtNivå=getAktivtNivå(b.id);
+    const inprog=S.inProgress[b.id];
+    const locked=S.tick<b.unlockTick&&aktivtNivå===0&&!inprog;
+    const nesteNivå=getNesteNivå(b.id);
     let sub='';
-    if(built)sub='<span style="color:var(--forest);font-size:10px">✓ Bygd</span>';
+    if(aktivtNivå>0&&!inprog&&!nesteNivå)sub=`<span style="color:var(--forest);font-size:10px">✓ Maks nivå (${aktivtNivå}/3)</span>`;
+    else if(aktivtNivå>0&&!inprog)sub=`<span style="color:var(--forest);font-size:10px">✓ Nivå ${aktivtNivå}/3 — klikk for oppgradering</span>`;
     else if(inprog)sub=`<span style="color:var(--gold);font-size:10px">🏗 ${inprog}t att</span>`;
     else if(locked)sub=`<span style="color:var(--stone);font-size:10px">🔒 Tick ${b.unlockTick}</span>`;
-    else sub='<span style="color:var(--rune-blue);font-size:10px">Klikk for info</span>';
-    return`<div class="sp-item ${built?'built':''} ${locked?'locked':''} ${inprog?'inprog':''}" onclick="${!locked?`visByggModal('${b.id}')`:''}" >
+    else sub='<span style="color:var(--rune-blue);font-size:10px">Klikk for info og bygging</span>';
+    return`<div class="sp-item ${aktivtNivå>0?'built':''} ${locked?'locked':''} ${inprog?'inprog':''}" onclick="${!locked?`visByggModal('${b.id}')`:''}" >
       <span class="sp-icon">${b.icon}</span>
       <span class="sp-body"><span class="sp-name">${b.name}</span><br>${sub}</span>
     </div>`;
@@ -1632,9 +1758,10 @@ function updByInfo(){
     {ic:'📜',la:'Skalder',k:'skald'},{ic:'👥',la:'Befolkning',k:'population'}
   ].map(r=>`<div class="by-stat"><span class="by-stat-lbl">${r.ic} ${r.la}</span><span class="by-stat-val">${S.r[r.k]||0}</span></div>`).join('');
   document.getElementById('by-bygn').innerHTML=BLDGS.map(b=>{
-    const built=S.buildings[b.id],inprog=S.inProgress[b.id];
-    const st=built?'color:var(--forest)':inprog?'color:var(--gold)':'color:var(--stone);opacity:.5';
-    return`<div class="by-stat"><span class="by-stat-lbl">${b.icon} ${b.name}</span><span style="${st};font-size:11px">${built?'✓':inprog?`🏗${S.inProgress[b.id]}t`:'—'}</span></div>`;
+    const nivå=getAktivtNivå(b.id),inprog=S.inProgress[b.id];
+    const st=nivå>0?'color:var(--forest)':inprog?'color:var(--gold)':'color:var(--stone);opacity:.5';
+    const tekst=nivå>0?`✓ Nivå ${nivå}/3`:inprog?`🏗${inprog}t`:'—';
+    return`<div class="by-stat"><span class="by-stat-lbl">${b.icon} ${b.name}</span><span style="${st};font-size:11px">${tekst}</span></div>`;
   }).join('');
   document.getElementById('by-status').innerHTML=[
     {ic:'✦',la:'Ære',k:'honour'},{ic:'☽',la:'Hamingja',k:'hamingja'},
