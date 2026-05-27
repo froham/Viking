@@ -1385,9 +1385,7 @@ function addEvCard(ev){
   const list=document.getElementById('ev-list');
   const card=document.createElement('div');
   card.className=`ev-card ${ev.type||''}`;
-  if(ev.tags)card.dataset.tags=ev.tags.join(',');
   const cid='ev-'+Date.now()+Math.random().toString(36).slice(2);
-  card.dataset.evid=cid;
   const actHtml=(ev.choices||[]).map((c,i)=>
     `<button class="btn ${i===0?'btn-primary':'btn-secondary'}" onclick="resolveEv('${cid}',${i})">${c.label}</button>`
   ).join('');
@@ -1398,6 +1396,9 @@ function addEvCard(ev){
       <div class="ev-actions">${actHtml}</div>
       <div class="ev-time">${gameTime(S.tick)}</div>
     </div>`;
+  // Set dataset ETTER innerHTML for å unngå at det blir nullstilt
+  card.dataset.evid=cid;
+  if(ev.tags)card.dataset.tags=ev.tags.join(',');
   list.prepend(card);
   S.events.push({...ev,cardId:cid});
   filtrerHendingar();
