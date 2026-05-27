@@ -333,6 +333,14 @@ body{background:#0d0a06;color:var(--ink);font-family:'Crimson Text',Georgia,seri
 
   <!-- MIDTKOLONNE -->
   <div id="mid">
+    <!-- SKJALD -->
+    <div style="background:var(--parchment-dark);border-bottom:1px solid var(--border-rune);padding:8px 14px;display:flex;gap:10px;align-items:center;flex-shrink:0;">
+      <div style="font-size:22px">🧙</div>
+      <div>
+        <div style="font-family:'Cinzel',serif;font-size:9px;letter-spacing:2px;color:var(--stone);text-transform:uppercase;margin-bottom:3px">Skjalden taler</div>
+        <div id="skjald-speech" style="font-style:italic;font-size:13px;color:var(--ink);line-height:1.5">Odins ravner ser deg, jarl.</div>
+      </div>
+    </div>
     <div id="mid-tabs">
       <div class="mtab active" onclick="switchMidTab('hendelser')" id="mt-hendelser">Hendingar<span class="mbadge" id="ev-badge" style="display:none"></span></div>
       <div class="mtab" onclick="switchMidTab('by')" id="mt-by">Jarldømet</div>
@@ -1548,10 +1556,10 @@ function updHeader(){
     {ic:'🌾',k:'food',dk:p.food},{ic:'🪵',k:'timber',dk:p.timber},
     {ic:'⛏',k:'iron',dk:p.iron},{ic:'✦',k:'honour',dk:p.honour}
   ].map(c=>`<div class="rc"><span>${c.ic}</span><span class="v">${S.r[c.k]||0}</span><span class="d ${c.dk<0?'neg':'pos'}">${c.dk>=0?'+':''}${c.dk}</span></div>`).join('');
-  document.getElementById('hdr-warriors').textContent=`⚔ ${S.r.warriors}`;
-  document.getElementById('hdr-tideverv').textContent='Tideverv '+romartall(S.tideverv||1);
-  document.getElementById('hdr-meta').textContent=`Tick ${S.tick} · ${gameTime(S.tick)}`;
-  document.getElementById('dev-bar-info').innerHTML=`Tick <span>${S.tick}</span> &nbsp;|&nbsp; ${gameTime(S.tick)} &nbsp;|&nbsp; Ragnarok <span>${Math.round(S.ragnarok)}%</span>`;
+  const _hw=document.getElementById('hdr-warriors');if(_hw)_hw.textContent=`⚔ ${S.r.warriors}`;
+  const _ht=document.getElementById('hdr-tideverv');if(_ht)_ht.textContent='Tideverv '+romartall(S.tideverv||1);
+  const _hm=document.getElementById('hdr-meta');if(_hm)_hm.textContent=`Tick ${S.tick} · ${gameTime(S.tick)}`;
+  const _dbi=document.getElementById('dev-bar-info');if(_dbi)_dbi.innerHTML=`Tick <span>${S.tick}</span> &nbsp;|&nbsp; ${gameTime(S.tick)} &nbsp;|&nbsp; Ragnarok <span>${Math.round(S.ragnarok)}%</span>`;
 }
 
 function updRagna(){
@@ -1559,8 +1567,8 @@ function updRagna(){
   const fill=document.getElementById('ragna-fill');
   fill.style.width=pct+'%';
   fill.style.background=pct<40?'linear-gradient(90deg,#2d6a2d,#4a9a4a)':pct<70?'linear-gradient(90deg,#8a6010,#c8a020)':'linear-gradient(90deg,#8b1a1a,#cc0000)';
-  document.getElementById('ragna-pct').textContent=Math.round(pct)+'%';
-  document.getElementById('ragna-desc').textContent=pct<30?'Jotunane søv.':pct<50?'Uroleg i nord.':pct<70?'Gudane kviskrar.':pct<85?'Fenrisulven vaknar.':'RAGNAROK ER NÆR!';
+  const _rp=document.getElementById('ragna-pct');if(_rp)_rp.textContent=Math.round(pct)+'%';
+  const _rd=document.getElementById('ragna-desc');if(_rd)_rd.textContent=pct<30?'Jotunane søv.':pct<50?'Uroleg i nord.':pct<70?'Gudane kviskrar.':pct<85?'Fenrisulven vaknar.':'RAGNAROK ER NÆR!';
 }
 
 function updByggList(){
@@ -1678,7 +1686,7 @@ document.getElementById('modal-bg').onclick=e=>{if(e.target===document.getElemen
 // ══ SAMLA UPDATE ══
 function updAll(){
   updHeader();updByggList();updInnList();updHandelList();updRagna();updRankGrid();
-  document.getElementById('skjald-speech').textContent=SKJALD[S.tick%SKJALD.length]?.();
+  const _ss=document.getElementById('skjald-speech');if(_ss)_ss.textContent=SKJALD[S.tick%SKJALD.length]?.()??'';
 }
 
 // ══ INIT ══
