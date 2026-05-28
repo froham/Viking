@@ -344,7 +344,7 @@ body{background:#0d0a06;color:var(--ink);font-family:'Crimson Text',Georgia,seri
     <div id="mid-tabs">
       <div class="mtab active" onclick="switchMidTab('hendelser')" id="mt-hendelser">Hendingar<span class="mbadge" id="ev-badge" style="display:none"></span></div>
       <div class="mtab" onclick="switchMidTab('by')" id="mt-by">Jarldømet</div>
-      <div class="mtab" onclick="switchMidTab('kart')" id="mt-kart">Kart & Jarlar</div>
+      <div class="mtab" onclick="switchMidTab('kart')" id="mt-kart">Kart & Jarlar<span class="mbadge" id="bud-badge" style="display:none"></span></div>
     </div>
     <div id="mid-content">
 
@@ -509,6 +509,20 @@ body{background:#0d0a06;color:var(--ink);font-family:'Crimson Text',Georgia,seri
         <div class="kart-rank">
           <div class="kart-rank-title">Ranglist — Ærestoppen</div>
           <div class="rank-grid" id="rank-grid"></div>
+        </div>
+        <!-- BUDBRINGARSYSTEM -->
+        <div style="background:var(--parchment);border-top:2px solid var(--border-rune);padding:14px 16px;">
+          <div style="font-family:'Cinzel',serif;font-size:10px;letter-spacing:3px;color:var(--stone);text-transform:uppercase;margin-bottom:10px">📨 Budbringarar</div>
+          <div id="bud-innboks" style="margin-bottom:12px"><div style="font-size:13px;color:var(--stone);font-style:italic">Ingen budskapar enno.</div></div>
+          <div style="border-top:1px solid var(--parchment-deeper);padding-top:10px;">
+            <div style="font-family:'Cinzel',serif;font-size:9px;letter-spacing:2px;color:var(--stone);text-transform:uppercase;margin-bottom:6px">Send nytt bud</div>
+            <select id="bud-til" style="width:100%;padding:6px 8px;background:#fff;border:1px solid var(--parchment-deeper);border-radius:2px;font-family:'Crimson Text',serif;font-size:13px;color:var(--ink);margin-bottom:6px"><option value="vel">Vel jarl...</option></select>
+            <textarea id="bud-melding" placeholder="Skriv eit bud (maks 200 teikn)..." maxlength="200" style="width:100%;padding:8px 10px;background:#fff;border:1px solid var(--parchment-deeper);border-radius:2px;font-family:'Crimson Text',serif;font-size:13px;color:var(--ink);resize:vertical;min-height:70px;margin-bottom:6px"></textarea>
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <span id="bud-teller" style="font-size:11px;color:var(--stone)">0/200</span>
+              <button class="btn btn-primary" onclick="sendBudskap()">📨 Send bud</button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -701,6 +715,8 @@ async function startSpel(){
     choices:[{label:'For Odin!',fn:()=>{chg('honour',1);tk('✦ Ære til Odin!')}}]
   });
   await sjekkVentandeRaidMotMeg();
+  // Last budskap i bakgrunnen
+  setTimeout(lastBudskap, 1000);
 }
 
 async function hentAlt(){
@@ -901,6 +917,12 @@ function prodForRes(r,bygn){
 }
 
 // ══ GLOBAL TICK — HOVUD DEBUG-FIKS ══
+function erNattvindu(){
+  const t=new Date();
+  const h=t.getHours();
+  return h>=0&&h<8;
+}
+
 async function globalTick(){
   if(!devUnlocked)return;
   const btn=document.getElementById('btn-tick');
@@ -974,15 +996,24 @@ async function globalTick(){
       if(bygnErr){devLog('FEIL bygningar: '+bygnErr.message,'loss');console.error('bygnErr',bygnErr);}
     }
 
-    // Raid — marker løyst FØR prosessering
+    // Raid — nattvindu 00-08: PvP-skade utsett til 08:01
+    const erNatt=erNattvindu();
     const{data:aktiveRaid}=await sb.from('raid').select('*').eq('løyst',false).lte('ankomst_tick',nyTick);
     const prosessert=new Set();
     for(const raid of(aktiveRaid||[])){
       if(prosessert.has(raid.id))continue;
+      // Viss nattvindu — utset PvP-raid til neste tick (ikkje marker løyst enno)
+      if(erNatt){
+        devLog(`Nattvindu: Raid ${raid.id.slice(0,8)} utsett til 08:01`,'info');
+        continue;
+      }
       prosessert.add(raid.id);
       await sb.from('raid').update({løyst:true}).eq('id',raid.id);
       if(raid.angriper_id===MIN_JARL?.id) await løysRaidFraTick(raid,alleRes,alleBygn);
       if(raid.forsvarer_id===MIN_JARL?.id) await varsleForsvarar(raid,alleRes,alleBygn);
+    }
+    if(erNatt&&(aktiveRaid||[]).length>0){
+      tk('🌙 Nattvindu aktiv — raid utsett til 08:01',3000);
     }
 
     // Sjekk raid som ankjem neste tick
@@ -1442,8 +1473,11 @@ function sjekkKjopmannRetur(){
   }else{
     const g=15+Math.floor(Math.random()*6);
     chg('silver',g);
+    // Kjøpmann gir hint om ein tilfeldig jarl
+    const tips=rykteOmJarl();
+    const tipsHtml=tips?`<br><br><i style="color:var(--stone);font-size:13px">Kjøpmannen fortel: "${tips}"</i>`:'';
     addEvCard({type:'divine',icon:'⚓',title:'Kjøpmannen er heimkomen!',
-      desc:`Handelsskipet glid inn med ${g} sølv!`,
+      desc:`Handelsskipet glid inn med ${g} sølv i lasterommet.${tipsHtml}`,
       choices:[{label:`Ta imot (+${g} sølv)`,fn:()=>tk(`+${g} sølv!`)}]
     });
     addLog(`[SEIER] Kjøpmann heimkomen med ${g} sølv.`,'win');
@@ -1453,8 +1487,36 @@ function spyReport(){
   if(!S.jarls.length){tk('Ingen jarlar å speide på.');return;}
   const j=S.jarls[Math.floor(Math.random()*S.jarls.length)];
   showModal(`👁 Speiderrapport: ${j.name}`,
-    `<div style="font-size:14px;line-height:2.2">⚔ Krigerar: <b>${j.warriors}</b><br>🪙 Sølv: ~<b>${j.silver}</b><br>✦ Ære: <b>${j.honour}</b></div>`,
+    `<div style="font-size:14px;line-height:2.2">
+      ⚔ Krigerar: <b>${j.warriors}</b><br>
+      🪙 Sølv: ~<b>${j.silver}</b><br>
+      ✦ Ære: <b>${j.honour}</b><br>
+      ${j.er_bot?'<span style="color:var(--stone);font-size:12px">AI-styrt jarl</span>':''}
+    </div>
+    <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--parchment-deeper)">
+      <div style="font-family:'Cinzel',serif;font-size:9px;letter-spacing:2px;color:var(--stone);text-transform:uppercase;margin-bottom:6px">Etterlysning</div>
+      <div style="font-size:13px;color:var(--stone);margin-bottom:7px">Betal 15 sølv for å lyse ut denne jarlen. Andre spelarar som sender deg info om han får 8 sølv.</div>
+      ${S.r.silver>=15
+        ?`<button class="btn btn-secondary" onclick="settEtterlysning('${j.id}','${j.name.replace(/'/g,"\'")}');closeModal()">💰 Etterlys (15 sølv)</button>`
+        :'<span style="font-size:12px;color:var(--blood)">Treng 15 sølv for etterlysning</span>'}
+    </div>`,
     [{label:'Lukk',fn:closeModal}]);
+}
+
+async function settEtterlysning(jarlId,jarlNamn){
+  if(S.r.silver<15){tk('Ikkje nok sølv!');return;}
+  chg('silver',-15);
+  // Lagre etterlysning som hendelse i Supabase for systemet
+  await sb.from('hendingar').insert({
+    jarl_id:MIN_JARL.id,type:'info',tittel:'etterlysning',
+    beskriving:JSON.stringify({søkjarId:MIN_JARL.id,målId:jarlId,målNamn:jarlNamn,belønning:8}),
+    løyst:false,tick_oppretta:S.tick
+  });
+  addEvCard({type:'trade',icon:'🔎',title:`Etterlysning: ${jarlNamn}`,
+    desc:`Du har lyst ut ${jarlNamn}. Andre spelarar som sender deg informasjon om denne jarlen får 8 sølv i belønning.`,
+    choices:[{label:'Forstått',fn:()=>{}}]
+  });
+  tk(`Etterlysning sendt! -15 sølv`);
 }
 
 // ══ HANDEL ══
@@ -1661,14 +1723,137 @@ function updRankGrid(){
   }).join('');
 }
 
+// ══ BUDBRINGARSYSTEM ══
+async function lastBudskap(){
+  if(!MIN_JARL)return;
+  const{data:bud}=await sb.from('budskap')
+    .select('*')
+    .or(`til_jarl_id.eq.${MIN_JARL.id},frå_jarl_id.eq.${MIN_JARL.id}`)
+    .order('opprettet',{ascending:false})
+    .limit(20);
+  if(!bud)return;
+
+  // Tell uleste
+  const uleste=bud.filter(b=>b.til_jarl_id===MIN_JARL.id&&!b.lest).length;
+  const badge=document.getElementById('bud-badge');
+  if(badge){badge.textContent=uleste;badge.style.display=uleste>0?'inline':'none';}
+
+  // Oppdater innboks
+  const innboks=document.getElementById('bud-innboks');
+  if(!innboks)return;
+  if(!bud.length){innboks.innerHTML='<div style="font-size:13px;color:var(--stone);font-style:italic">Ingen budskapar enno.</div>';return;}
+
+  const jarlNamn=id=>{
+    if(id===MIN_JARL.id)return'Deg';
+    return S.jarls.find(j=>j.id===id)?.name||'Ukjend jarl';
+  };
+
+  innboks.innerHTML=bud.map(b=>{
+    const erMottakar=b.til_jarl_id===MIN_JARL.id;
+    const erUlest=erMottakar&&!b.lest;
+    const fraNamn=jarlNamn(b.frå_jarl_id);
+    const tilNamn=jarlNamn(b.til_jarl_id);
+    const dato=new Date(b.opprettet).toLocaleString('no',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+    return`<div style="border:1px solid ${erUlest?'var(--gold)':'var(--parchment-deeper)'};border-radius:3px;padding:9px 12px;margin-bottom:7px;background:${erUlest?'rgba(200,144,10,.05)':'#fff'}" onclick="opneBudskap('${b.id}','${b.frå_jarl_id}')">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <span style="font-family:'Cinzel',serif;font-size:11px;font-weight:600;color:var(--ink)">${erMottakar?'Frå: '+fraNamn:'Til: '+tilNamn}</span>
+        <span style="font-size:10px;color:var(--stone)">${dato}${erUlest?' 🔔':''}</span>
+      </div>
+      <div style="font-size:13px;color:var(--stone)">${b.melding.length>80?b.melding.slice(0,80)+'…':b.melding}</div>
+    </div>`;
+  }).join('');
+
+  // Merk som lest
+  const ulestIds=bud.filter(b=>b.til_jarl_id===MIN_JARL.id&&!b.lest).map(b=>b.id);
+  if(ulestIds.length){
+    await sb.from('budskap').update({lest:true}).in('id',ulestIds);
+  }
+}
+
+function opneBudskap(budId,frå_jarl_id){
+  // Hent fullt budskap og vis modal med svar-moglegheit
+  sb.from('budskap').select('*').eq('id',budId).single().then(({data:b})=>{
+    if(!b)return;
+    const fraNamn=frå_jarl_id===MIN_JARL?.id?'Deg':S.jarls.find(j=>j.id===frå_jarl_id)?.name||'Ukjend';
+    const erMottakar=b.til_jarl_id===MIN_JARL?.id;
+    showModal(`📨 Bud frå ${fraNamn}`,
+      `<div style="font-size:14px;line-height:1.7;color:var(--ink);margin-bottom:12px">${b.melding}</div>
+      ${erMottakar?`<div style="border-top:1px solid var(--parchment-deeper);padding-top:10px">
+        <div style="font-family:'Cinzel',serif;font-size:9px;letter-spacing:2px;color:var(--stone);text-transform:uppercase;margin-bottom:6px">Svar:</div>
+        <textarea id="svar-melding" placeholder="Skriv svar (maks 200 teikn)..." maxlength="200" style="width:100%;padding:8px;background:#fff;border:1px solid var(--parchment-deeper);border-radius:2px;font-family:'Crimson Text',serif;font-size:13px;color:var(--ink);resize:vertical;min-height:60px"></textarea>
+      </div>`:''}`,
+      erMottakar
+        ?[{label:'📨 Send svar',fn:()=>svarPåBudskap(frå_jarl_id,budId)},{label:'Lukk',fn:closeModal}]
+        :[{label:'Lukk',fn:closeModal}]);
+  });
+}
+
+async function svarPåBudskap(tilJarlId,svarTilId){
+  const melding=document.getElementById('svar-melding')?.value?.trim();
+  if(!melding){tk('Skriv ein melding!');return;}
+  const{error}=await sb.from('budskap').insert({
+    frå_jarl_id:MIN_JARL.id,til_jarl_id:tilJarlId,
+    melding,svar_til:svarTilId,tick_sendt:S.tick
+  });
+  if(error){tk('Feil: '+error.message);return;}
+  closeModal();tk('Svar sendt!');
+  lastBudskap();
+}
+
+async function sendBudskap(){
+  const tilId=document.getElementById('bud-til')?.value;
+  const melding=document.getElementById('bud-melding')?.value?.trim();
+  if(!tilId||tilId==='vel'){tk('Vel ein jarl å sende til!');return;}
+  if(!melding){tk('Skriv ein melding!');return;}
+  if(melding.length>200){tk('Maks 200 teikn!');return;}
+  const{error}=await sb.from('budskap').insert({
+    frå_jarl_id:MIN_JARL.id,til_jarl_id:tilId,
+    melding,tick_sendt:S.tick
+  });
+  if(error){tk('Feil: '+error.message);return;}
+  document.getElementById('bud-melding').value='';
+  document.getElementById('bud-teller').textContent='0/200';
+  tk('Bud sendt!');
+  lastBudskap();
+}
+
+function oppdaterBudTil(){
+  const sel=document.getElementById('bud-til');if(!sel)return;
+  sel.innerHTML=`<option value="vel">Vel jarl å sende til...</option>`+
+    S.jarls.filter(j=>!j.er_bot).map(j=>`<option value="${j.id}">${j.name}</option>`).join('');
+}
+
+// Telje-funksjon for tekstfelt
+document.addEventListener('input',e=>{
+  if(e.target.id==='bud-melding'){
+    const teller=document.getElementById('bud-teller');
+    if(teller)teller.textContent=`${e.target.value.length}/200`;
+  }
+});
+
 // ══ SKJALD ══
+function rykteOmJarl(){
+  // Hardkoda rykte-mal basert på nærbuande jarlar
+  const nabo=S.jarls[Math.floor(Math.random()*Math.max(1,S.jarls.length))];
+  if(!nabo)return null;
+  const malar=[
+    `Ravnane kviskrar om ${nabo.name} — ein jarl med ${nabo.warriors} krigarar og veksande ære.`,
+    `Ein vandrar fortel om ${nabo.name} i ${nabo.er_bot?'aust':'vest'}, som samlar menn og ressursar.`,
+    `Skaldene syng om ${nabo.name}. Det vert sagt at ære og sølv flyt i det jarldømet.`,
+    `Handelsmenn rapporterer at ${nabo.name} har sett auge på nye territorium.`,
+    `Eit rykte frå nord: ${nabo.name} har ${nabo.honour>20?'stor':'lita'} ære, men er ikkje å undervurdere.`,
+  ];
+  return malar[Math.floor(Math.random()*malar.length)];
+}
+
 const SKJALD=[
   ()=>S.r.honour>25?'Ditt namn syng frå sør til nord. Sjølv Odin lener seg fram.':S.r.honour<8?'Æren falmar. Menn ser vekk.':'Ærens vekt berast av dei som handlar.',
   ()=>S.r.mead<4?'Mjødkaret er tomt — krigarane murrar.':S.r.mead>20?'Mead-hallen summer av song.':'Mjøden flyt, troppane er nøgde.',
   ()=>S.ragnarok>60?'Jotunane samlar seg. Ragnarok nærmar seg!':S.ragnarok>35?'Gudane er uroleg stille.':'Verdenen er i balanse.',
   ()=>S.raidInFlight?`${S.raidInFlight.warriors} krigerar på havet mot ${S.raidInFlight.targetName}.`:S.r.warriors>12?'Ein mektig hær samlar seg.':'Rekrutter fleire krigarar.',
-  ()=>`${S.r.bonder} bønder dyrkar jorda. ${S.r.skald} skalder syng om deg.`,
-  ()=>isNight(S.tick)?'Natten er gudanes tid.':'Dagen gryr. Kva vil du byggje?',
+  ()=>rykteOmJarl()||`${S.r.bonder} bønder dyrkar jorda. ${S.r.skald} skalder syng om deg.`,
+  ()=>isNight(S.tick)?'🌙 Natten er gudanes tid — ingen angrip i mørket.':'Dagen gryr. Kva vil du byggje?',
+  ()=>{const r=rykteOmJarl();return r||'Midgard er stille. Førebels.';},
 ];
 
 // ══ OPPDATERING ══
@@ -1683,7 +1868,7 @@ function updHeader(){
   const _hw=document.getElementById('hdr-warriors');if(_hw)_hw.textContent=`⚔ ${S.r.warriors}`;
   const _ht=document.getElementById('hdr-tideverv');if(_ht)_ht.textContent='Tideverv '+romartall(S.tideverv||1);
   const _hm=document.getElementById('hdr-meta');if(_hm)_hm.textContent=`Tick ${S.tick} · ${gameTime(S.tick)}`;
-  const _dbi=document.getElementById('dev-bar-info');if(_dbi)_dbi.innerHTML=`Tick <span>${S.tick}</span> &nbsp;|&nbsp; ${gameTime(S.tick)} &nbsp;|&nbsp; Ragnarok <span>${Math.round(S.ragnarok)}%</span>`;
+  const _dbi=document.getElementById('dev-bar-info');if(_dbi)_dbi.innerHTML=`Tick <span>${S.tick}</span> &nbsp;|&nbsp; ${gameTime(S.tick)} &nbsp;|&nbsp; Ragnarok <span>${Math.round(S.ragnarok)}%</span>${erNattvindu()?' &nbsp;|&nbsp; <span style="color:#8ab">🌙 Nattvindu</span>':''}`;
 }
 
 function updRagna(){
@@ -1795,7 +1980,7 @@ function switchMidTab(id){
     document.getElementById('tp-'+t).classList.toggle('active',t===id);
   });
   if(id==='by')updByInfo();
-  if(id==='kart'){updRankGrid();updKartDots();}
+  if(id==='kart'){updRankGrid();updKartDots();lastBudskap();oppdaterBudTil();}
 }
 
 // ══ MODAL ══
@@ -1827,6 +2012,9 @@ function updAll(){
   }
   document.getElementById('auth-screen').style.display='flex';
 })();
+
+// Poll for nye budskap kvart 60 sekund
+setInterval(()=>{if(MIN_JARL)lastBudskap();},60000);
 </script>
 </body>
 </html>
