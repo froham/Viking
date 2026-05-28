@@ -498,6 +498,8 @@ body{background:#0d0a06;color:var(--ink);font-family:'Crimson Text',Georgia,seri
             <image href="img/kart.png" x="0" y="0" width="960" height="540" clip-path="url(#kart-clip)" preserveAspectRatio="xMidYMid slice"/>
             <!-- Lett mørklegging for å gjere prikkar meir synlege -->
             <rect width="960" height="540" fill="rgba(0,0,0,0.08)"/>
+            <!-- Kalibrerings-overlay (berre synleg i dev-modus) -->
+            <rect id="kart-kalibrering-overlay" width="960" height="540" fill="transparent" style="display:none;cursor:crosshair"/>
             <!-- JARL-PRIKKAR (dynamisk) -->
             <g id="jarl-dots"></g>
             <!-- RAID-SKIP (dynamisk) -->
@@ -598,6 +600,10 @@ body{background:#0d0a06;color:var(--ink);font-family:'Crimson Text',Georgia,seri
       </div>
       <div class="dev-col-title">Logg</div>
       <div class="dev-log" id="dev-log"></div>
+      <div class="dev-col-title" style="margin-top:10px">Kartkalibrering</div>
+      <button class="btn-dev btn-dev-neutral" onclick="toggleKalibrering()" id="btn-kalibrering" style="width:100%;margin-bottom:6px">🎯 Start kalibrering</button>
+      <div id="kalibrering-status" style="font-size:11px;color:#6a8aaa;margin-bottom:4px">Av</div>
+      <div id="kalibrering-log" style="font-size:10px;color:#4a7a6a;max-height:100px;overflow-y:auto;font-family:monospace"></div>
     </div>
     <div>
       <div class="dev-col-title">Spelarar</div>
@@ -2262,6 +2268,79 @@ function updAll(){
   }
   document.getElementById('auth-screen').style.display='flex';
 })();
+
+// ══ KARTKALIBRERING ══
+let kalibreringAktiv=false;
+const kalibreringPunkt=[
+  'Bergen','Nidaros','Roskilde','Uppsala','Reykjavík',
+  'Gardar','Rouen','Pictland','Dún Éideann','Uppsalir'
+];
+let kalibreringIndex=0;
+const kalibreringResultat={};
+
+function toggleKalibrering(){
+  kalibreringAktiv=!kalibreringAktiv;
+  const overlay=document.getElementById('kart-kalibrering-overlay');
+  const btn=document.getElementById('btn-kalibrering');
+  const status=document.getElementById('kalibrering-status');
+  if(kalibreringAktiv){
+    overlay.style.display='block';
+    btn.textContent='⏹ Stopp kalibrering';
+    btn.style.background='rgba(139,26,26,.3)';
+    kalibreringIndex=0;
+    status.textContent=`Klikk på: ${kalibreringPunkt[0]}`;
+    status.style.color='#6aaa6a';
+    overlay.onclick=(e)=>registrerKlikk(e);
+  } else {
+    overlay.style.display='none';
+    btn.textContent='🎯 Start kalibrering';
+    btn.style.background='';
+    status.textContent='Av';
+    status.style.color='#6a8aaa';
+    overlay.onclick=null;
+  }
+}
+
+function registrerKlikk(e){
+  const svg=document.getElementById('world-svg');
+  const rect=svg.getBoundingClientRect();
+  // Konverter til SVG-koordinatar (960x540)
+  const px=Math.round((e.clientX-rect.left)/rect.width*960);
+  const py=Math.round((e.clientY-rect.top)/rect.height*540);
+  const namn=kalibreringPunkt[kalibreringIndex];
+  kalibreringResultat[namn]={px,py};
+  // Logg
+  const log=document.getElementById('kalibrering-log');
+  log.innerHTML+=`<div style="color:#6aaa6a">${namn}: {px:${px}, py:${py}}</div>`;
+  log.scrollTop=log.scrollHeight;
+  devLog(`Kalibrert: ${namn} → (${px}, ${py})`,'win');
+  // Neste punkt
+  kalibreringIndex++;
+  const status=document.getElementById('kalibrering-status');
+  if(kalibreringIndex<kalibreringPunkt.length){
+    status.textContent=`Klikk på: ${kalibreringPunkt[kalibreringIndex]}`;
+    // Vis mellombels prikk på kartet
+    visKalibreringsPrikk(px,py,namn);
+  } else {
+    status.textContent='Ferdig! Kopier frå loggen.';
+    status.style.color='#e8b020';
+    toggleKalibrering();
+    // Skriv ut alle resultat
+    console.log('=== KALIBRERING FERDIG ===');
+    console.log(JSON.stringify(kalibreringResultat,null,2));
+    devLog('Kalibrering ferdig — sjå konsoll for alle koordinatar','win');
+  }
+}
+
+function visKalibreringsPrikk(px,py,namn){
+  const svg=document.getElementById('world-svg');
+  const prikk=document.createElementNS('http://www.w3.org/2000/svg','g');
+  prikk.innerHTML=`<circle cx="${px}" cy="${py}" r="6" fill="#e8b020" stroke="#0d0a06" stroke-width="2" opacity=".9"/>
+    <text x="${px}" y="${py-10}" text-anchor="middle" font-size="10" fill="#e8b020" font-family="Cinzel,serif">${namn}</text>`;
+  svg.appendChild(prikk);
+  // Fjern etter 10 sekund
+  setTimeout(()=>svg.removeChild(prikk),10000);
+}
 
 // Poll for nye budskap kvart 60 sekund
 setInterval(()=>{if(MIN_JARL)lastBudskap();},60000);
