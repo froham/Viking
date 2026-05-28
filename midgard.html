@@ -1863,6 +1863,13 @@ function updKartDots(){
   // Grupper jarlar på same/nær posisjon
   const SAMLEGRENSE=30;
   const behandla=new Set();
+  // Pre-merk jarlar som er nær eigen jarl — dei handterast i eigen-jarl-blokka
+  S.jarls.forEach(j=>{
+    const p2=jarlPos(j);
+    if(Math.sqrt(Math.pow(minPos.x-p2.x,2)+Math.pow(minPos.y-p2.y,2))<SAMLEGRENSE){
+      behandla.add(j.id);
+    }
+  });
   S.jarls.forEach(j=>{
     if(behandla.has(j.id))return;
     const pos=jarlPos(j);
