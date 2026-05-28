@@ -1801,11 +1801,9 @@ function pxPosTilSVG(px,py){
   return{x:Math.max(30,Math.min(930,px)),y:Math.max(30,Math.min(510,py))};
 }
 
-// Finn kartplass for ein jarl basert på hex_x/hex_y (brukt som stabil ID)
+// Finn kartplass for ein jarl — hex_x er direkte indeks i KARTPLASSAR
 function finnKartposPx(hx,hy){
-  // Kartplassar er tildelt ved registrering — hex_x er indeks i KARTPLASSAR
-  const idx=Math.max(0,Math.min(KARTPLASSAR.length-1,
-    Math.abs((hx||0)*7+(hy||0)*3)%KARTPLASSAR.length));
+  const idx=Math.max(0,Math.min(KARTPLASSAR.length-1,Math.abs(hx||0)));
   return KARTPLASSAR[idx];
 }
 function hexPath(cx,cy,r){
@@ -1817,7 +1815,8 @@ function hexAvstand(x1,y1,x2,y2){const dx=x2-x1,dy=y2-y1;return Math.max(Math.ab
 function pikseldistanse(j1,j2){
   const p1=finnKartposPx(j1.hex_x||0,j1.hex_y||0);
   const p2=finnKartposPx(j2.hex_x||0,j2.hex_y||0);
-  return Math.sqrt(Math.pow(p1.px-p2.px,2)+Math.pow(p1.py-p2.py,2));
+  const dx=p1.px-p2.px, dy=p1.py-p2.py;
+  return Math.sqrt(dx*dx+dy*dy);
 }
 
 function raidTicks(fra,til){
@@ -1861,15 +1860,24 @@ function updKartDots(){
       html+=`<ellipse cx="${sx}" cy="${sy+4}" rx="13" ry="4" fill="#5a3010" opacity=".9"/><line x1="${sx}" y1="${sy}" x2="${sx}" y2="${sy-13}" stroke="#3a2008" stroke-width="2"/><polygon points="${sx},${sy-10} ${sx+11},${sy-3} ${sx},${sy-1}" fill="#c8b880" opacity=".9"/>`;
     }
   }
-  // Andre jarlar
+  // Grupper jarlar på same/nær posisjon
+  const SAMLEGRENSE=30;
+  const behandla=new Set();
   S.jarls.forEach(j=>{
+    if(behandla.has(j.id))return;
     const pos=jarlPos(j);
+    const gruppe=[j,...S.jarls.filter(j2=>{
+      if(j2.id===j.id||behandla.has(j2.id))return false;
+      const p2=jarlPos(j2);
+      return Math.sqrt(Math.pow(pos.x-p2.x,2)+Math.pow(pos.y-p2.y,2))<SAMLEGRENSE;
+    })];
+    gruppe.forEach(jj=>behandla.add(jj.id));
     const avstand=raidTicks(MIN_JARL||{hex_x:0,hex_y:0},j);
-    const col=j.er_bot?'#8080c0':j.relation==='fiende'?'#c04040':'#5090c0';
-    const r=j.honour>30?11:j.honour>15?9:7;
-    const nk=j.name.length>12?j.name.slice(0,10)+'…':j.name;
-    const jid=encodeURIComponent(j.id);const jn=encodeURIComponent(j.name);
-    html+=`<g style="cursor:pointer" onclick="visJarlKartModal(decodeURIComponent('${jid}'),decodeURIComponent('${jn}'),${j.warriors},${j.honour},false)"><circle cx="${pos.x}" cy="${pos.y}" r="${r+5}" fill="${col}" opacity=".18"/><circle cx="${pos.x}" cy="${pos.y}" r="${r}" fill="${col}" stroke="#0d0a06" stroke-width="2"/><text x="${pos.x}" y="${pos.y+4}" text-anchor="middle" font-size="9" fill="#fff" font-family="sans-serif">${j.er_bot?'🤖':'👤'}</text><text x="${pos.x}" y="${pos.y-r-8}" text-anchor="middle" font-size="9" fill="#c8b882" font-family="Cinzel,serif">${nk}</text><text x="${pos.x}" y="${pos.y+r+13}" text-anchor="middle" font-size="8" fill="rgba(200,180,100,.7)" font-family="Cinzel,serif">${avstand}t</text></g>`;
+    const col=gruppe.length>1?'#c8900a':j.er_bot?'#8080c0':'#5090c0';
+    const r=10;
+    const nk=gruppe.length>1?`${gruppe.length} jarlar`:j.name.length>12?j.name.slice(0,10)+'…':j.name;
+    const gruppeData=encodeURIComponent(JSON.stringify(gruppe.map(jj=>({id:jj.id,name:jj.name,warriors:jj.warriors,honour:jj.honour}))));
+    html+=`<g style="cursor:pointer" onclick="visGruppeModal(decodeURIComponent('${gruppeData}'))"><circle cx="${pos.x}" cy="${pos.y}" r="${r+5}" fill="${col}" opacity=".2"/><circle cx="${pos.x}" cy="${pos.y}" r="${r}" fill="${col}" stroke="#0d0a06" stroke-width="2"/><text x="${pos.x}" y="${pos.y+4}" text-anchor="middle" font-size="${gruppe.length>1?11:9}" fill="#fff" font-family="sans-serif">${gruppe.length>1?gruppe.length:'👤'}</text><text x="${pos.x}" y="${pos.y-18}" text-anchor="middle" font-size="9" fill="#c8b882" font-family="Cinzel,serif">${nk}</text><text x="${pos.x}" y="${pos.y+22}" text-anchor="middle" font-size="8" fill="rgba(200,180,100,.7)" font-family="Cinzel,serif">${avstand}t</text></g>`;
   });
   // Eigen jarl
   const mid=encodeURIComponent(MIN_JARL?.id||'');const mn=encodeURIComponent(MIN_JARL?.jarlnamn||'');
@@ -1879,6 +1887,54 @@ function updKartDots(){
 }
 
 function updKartRaidShip(vis){}
+
+function visGruppeModal(gruppeJson){
+  let gruppe;
+  try{gruppe=JSON.parse(gruppeJson);}catch(e){return;}
+
+  if(gruppe.length===1){
+    // Berre éin jarl — vis direkte
+    const j=gruppe[0];
+    visJarlKartModal(j.id,j.name,j.warriors,j.honour,false);
+    return;
+  }
+
+  // Fleire jarlar på same stad — vis liste
+  const maxW=Math.max(1,S.r.warriors);
+  const listeHtml=gruppe.map(j=>{
+    const erMeg=j.id===MIN_JARL?.id;
+    const jarlObj=S.jarls.find(x=>x.id===j.id)||{};
+    const avstand=raidTicks(MIN_JARL||{hex_x:0,hex_y:0},jarlObj);
+    return`<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--parchment-deeper)">
+      <span style="font-size:16px">${jarlObj.er_bot?'🤖':'🦅'}</span>
+      <span style="flex:1">
+        <div style="font-family:'Cinzel',serif;font-size:12px;font-weight:600;color:var(--ink)">${j.name}${erMeg?' <span style="color:var(--gold);font-size:10px">(deg)</span>':''}</div>
+        <div style="font-size:11px;color:var(--stone)">✦${j.honour} ⚔${j.warriors} • ${avstand}t reisetid</div>
+      </span>
+      ${!erMeg&&!S.raidInFlight&&S.r.warriors>=2
+        ?`<button class="btn btn-danger" style="font-size:9px;padding:4px 8px" onclick="closeModal();openRaidModal('${j.id}')">⚔ Raid</button>`
+        :''}
+      ${!erMeg?`<button class="btn btn-secondary" style="font-size:9px;padding:4px 8px" onclick="closeModal();visMeldingModal('${j.id}','${j.name.replace(/'/g,"\'")}')">📨 Bud</button>`:''}
+    </div>`;
+  }).join('');
+
+  const stad=finnKartposPx(S.jarls.find(j=>j.id===gruppe[0].id)?.hex_x||0,0);
+  showModal(`📍 ${stad.namn} — ${gruppe.length} jarlar`,listeHtml,
+    [{label:'Lukk',fn:closeModal}]);
+}
+
+function visMeldingModal(jarlId,jarlNamn){
+  showModal(`📨 Send bud til ${jarlNamn}`,
+    `<textarea id="hurtig-melding" placeholder="Skriv eit bud (maks 200 teikn)..." maxlength="200"
+      style="width:100%;padding:8px;background:#fff;border:1px solid var(--parchment-deeper);border-radius:2px;font-family:'Crimson Text',serif;font-size:14px;color:var(--ink);resize:vertical;min-height:80px"></textarea>`,
+    [{label:'📨 Send',fn:async()=>{
+      const m=document.getElementById('hurtig-melding')?.value?.trim();
+      if(!m){tk('Skriv ein melding!');return;}
+      const{error}=await sb.from('budskap').insert({frå_jarl_id:MIN_JARL.id,til_jarl_id:jarlId,melding:m,tick_sendt:S.tick});
+      if(error){tk('Feil: '+error.message);return;}
+      closeModal();tk('Bud sendt!');
+    }},{label:'Avbryt',fn:closeModal}]);
+}
 
 function visJarlKartModal(jarlId,namn,warriors,honour,erMeg){
   if(erMeg){
