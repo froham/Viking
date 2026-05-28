@@ -1789,7 +1789,7 @@ function updKartDots(){
     const r=j.honour>30?11:j.honour>15?9:7;
     const nk=j.name.length>12?j.name.slice(0,10)+'…':j.name;
     const jid=j.id.replace(/'/g,"\'");const jn=j.name.replace(/'/g,"\'");
-    html+=`<g style="cursor:pointer" onclick="visJarlKartModal('${jid}','${jn}',${j.warriors},${j.honour},false)"><circle cx="${pos.x}" cy="${pos.y}" r="${r+5}" fill="${col}" opacity=".18"/><circle cx="${pos.x}" cy="${pos.y}" r="${r}" fill="${col}" stroke="#0d0a06" stroke-width="2"/><text x="${pos.x}" y="${pos.y+4}" text-anchor="middle" font-size="9" fill="#fff" font-family="sans-serif">${j.er_bot?'🤖':'👤'}</text><text x="${pos.x}" y="${pos.y-${r+8}}" text-anchor="middle" font-size="9" fill="#c8b882" font-family="Cinzel,serif">${nk}</text><text x="${pos.x}" y="${pos.y+${r+13}}" text-anchor="middle" font-size="8" fill="rgba(200,180,100,.7)" font-family="Cinzel,serif">${avstand}t</text></g>`;
+    html+=`<g style="cursor:pointer" onclick="visJarlKartModal('${jid}','${jn}',${j.warriors},${j.honour},false)"><circle cx="${pos.x}" cy="${pos.y}" r="${r+5}" fill="${col}" opacity=".18"/><circle cx="${pos.x}" cy="${pos.y}" r="${r}" fill="${col}" stroke="#0d0a06" stroke-width="2"/><text x="${pos.x}" y="${pos.y+4}" text-anchor="middle" font-size="9" fill="#fff" font-family="sans-serif">${j.er_bot?'🤖':'👤'}</text><text x="${pos.x}" y="${pos.y-r-8}" text-anchor="middle" font-size="9" fill="#c8b882" font-family="Cinzel,serif">${nk}</text><text x="${pos.x}" y="${pos.y+r+13}" text-anchor="middle" font-size="8" fill="rgba(200,180,100,.7)" font-family="Cinzel,serif">${avstand}t</text></g>`;
   });
   // Eigen jarl
   const mid=(MIN_JARL?.id||'').replace(/'/g,"\'");const mn=(MIN_JARL?.jarlnamn||'').replace(/'/g,"\'");
