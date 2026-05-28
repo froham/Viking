@@ -1730,6 +1730,23 @@ function addLog(msg,cls='info'){
   devLog(msg,cls);
 }
 
+// ══ RANGLIST ══
+function updRankGrid(){
+  const meg={id:MIN_JARL?.id,name:MIN_JARL?.jarlnamn||'Deg',icon:'🦅',honour:S.r.honour,warriors:S.r.warriors,er_bot:false};
+  const all=[meg,...S.jarls].sort((a,b)=>b.honour-a.honour);
+  const el=document.getElementById('rank-grid');
+  if(!el)return;
+  el.innerHTML=all.map((j,i)=>{
+    const isMe=j.id===MIN_JARL?.id;
+    return`<div class="rank-card ${isMe?'me':''}">
+      <span class="rank-num">${i+1}.</span>
+      <span style="font-size:16px">${j.icon||'🦅'}</span>
+      <span class="rank-name" style="${isMe?'color:var(--gold)':''}">${j.name}${j.er_bot?' 🤖':''}</span>
+      <span class="rank-hon">✦${j.honour}</span>
+    </div>`;
+  }).join('');
+}
+
 // ══ HEX-KART ══
 // Hex-origo kalibrert mot kart.png
 // Bergen (Noreg) ligg på ca (573, 257) i 960x540
