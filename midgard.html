@@ -1748,15 +1748,17 @@ function updRankGrid(){
 }
 
 // ══ HEX-KART ══
-// Hex-origo kalibrert mot kart.png
-// Bergen (Noreg) ligg på ca (573, 257) i 960x540
-const HEX_ORIGO={x:573,y:265};
+// Hex-origo = Bergen, Noreg på kartet
+// Kalibrert frå kart.png 960x540
+const HEX_ORIGO={x:575,y:258};
 const HEX_SIZE=48;
 
 function hexTilPx(hx,hy){
-  const px=HEX_ORIGO.x+HEX_SIZE*(hx*1.732);
-  const py=HEX_ORIGO.y+HEX_SIZE*(hy*2+hx);
-  return{x:Math.max(30,Math.min(930,Math.round(px))),y:Math.max(30,Math.min(510,Math.round(py)))};
+  // Større spreiing — kvar hex-eining = 90px horisontalt, 80px vertikalt
+  const px=HEX_ORIGO.x+90*(hx*1.732);
+  const py=HEX_ORIGO.y+80*(hy+hx*0.5);
+  return{x:Math.max(50,Math.min(900,Math.round(px))),
+         y:Math.max(40,Math.min(500,Math.round(py)))};
 }
 function hexPath(cx,cy,r){
   const pts=[];for(let i=0;i<6;i++){const a=Math.PI/180*(60*i-30);pts.push(`${cx+r*Math.cos(a)},${cy+r*Math.sin(a)}`);}
