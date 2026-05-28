@@ -490,53 +490,18 @@ body{background:#0d0a06;color:var(--ink);font-family:'Crimson Text',Georgia,seri
       <!-- KART -->
       <div class="mtab-panel" id="tp-kart">
         <div class="kart-wrap">
-          <svg viewBox="0 0 960 540" xmlns="http://www.w3.org/2000/svg" id="world-svg">
+          <svg viewBox="0 0 960 540" xmlns="http://www.w3.org/2000/svg" id="world-svg" style="display:block">
             <defs>
-              <linearGradient id="ocean" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#2a4a6a"/>
-                <stop offset="100%" stop-color="#1a3a5a"/>
-              </linearGradient>
+              <clipPath id="kart-clip"><rect width="960" height="540"/></clipPath>
             </defs>
-            <rect width="960" height="540" fill="url(#ocean)"/>
-            <!-- BØLGER -->
-            <path d="M0,60 Q48,52 96,60 Q144,68 192,60 Q240,52 288,60 Q336,68 384,60 Q432,52 480,60 Q528,68 576,60 Q624,52 672,60 Q720,68 768,60 Q816,52 864,60 Q912,68 960,60" stroke="#3a5a7a" stroke-width="1.5" fill="none" opacity=".5"/>
-            <path d="M0,400 Q48,392 96,400 Q144,408 192,400 Q240,392 288,400 Q336,408 384,400 Q432,392 480,400 Q528,408 576,400 Q624,392 672,400 Q720,408 768,400 Q816,392 864,400 Q912,408 960,400" stroke="#3a5a7a" stroke-width="1.5" fill="none" opacity=".4"/>
-            <!-- SKANDINAVIA -->
-            <polygon points="180,80 320,60 360,120 340,200 280,280 220,320 160,280 120,200 140,120" fill="#3a5a2a" stroke="#2a4a1a" stroke-width="2"/>
-            <!-- ISLAND -->
-            <ellipse cx="80" cy="200" rx="55" ry="35" fill="#3a5a2a" stroke="#2a4a1a" stroke-width="2"/>
-            <text x="80" y="204" text-anchor="middle" font-size="12" fill="#a0c080" font-family="Cinzel,serif">ÍSLAND</text>
-            <!-- ENGLAND/IRLAND -->
-            <polygon points="120,350 180,330 200,380 180,430 120,440 90,400" fill="#4a5a30" stroke="#3a4a20" stroke-width="1.5"/>
-            <text x="145" y="390" text-anchor="middle" font-size="11" fill="#b0c080" font-family="Cinzel,serif">ERIN</text>
-            <!-- FRANKRIKE/NORMANDIE -->
-            <polygon points="220,440 340,420 360,480 300,520 220,510" fill="#5a6a30" stroke="#4a5a20" stroke-width="1.5"/>
-            <text x="290" y="478" text-anchor="middle" font-size="11" fill="#b0c080" font-family="Cinzel,serif">NORMANDIE</text>
-            <!-- GARDARIKE -->
-            <polygon points="460,80 620,60 680,160 640,260 560,300 460,260 420,180" fill="#3a4a2a" stroke="#2a3a1a" stroke-width="1.5"/>
-            <text x="550" y="185" text-anchor="middle" font-size="12" fill="#a0b070" font-family="Cinzel,serif">GARDARIKE</text>
-            <!-- GRØNLAND -->
-            <polygon points="820,40 900,30 940,100 900,160 840,180 800,140 810,80" fill="#4a5050" stroke="#3a4040" stroke-width="1.5"/>
-            <text x="870" y="110" text-anchor="middle" font-size="11" fill="#a0b0b0" font-family="Cinzel,serif">GRØNLAND</text>
-            <!-- JOTUNHEIM -->
-            <polygon points="300,20 420,10 460,70 380,100 300,80" fill="#2a2a4a" stroke="#1a1a3a" stroke-width="2"/>
-            <text x="370" y="52" text-anchor="middle" font-size="11" fill="#8080c0" font-family="Cinzel,serif">JOTUNHEIM ⚡</text>
-            <!-- STADNAMN -->
-            <text x="240" y="100" text-anchor="middle" font-size="11" fill="#d0e0b0" font-family="Cinzel,serif">NOREG</text>
-            <text x="290" y="160" text-anchor="middle" font-size="10" fill="#c0d0a0" font-family="Cinzel,serif">SVERIGE</text>
-            <text x="220" y="240" text-anchor="middle" font-size="10" fill="#c0d0a0" font-family="Cinzel,serif">DANMARK</text>
+            <!-- KARTBILETE SOM BAKGRUNN -->
+            <image href="img/kart.png" x="0" y="0" width="960" height="540" clip-path="url(#kart-clip)" preserveAspectRatio="xMidYMid slice"/>
+            <!-- Lett mørklegging for å gjere prikkar meir synlege -->
+            <rect width="960" height="540" fill="rgba(0,0,0,0.08)"/>
             <!-- JARL-PRIKKAR (dynamisk) -->
             <g id="jarl-dots"></g>
             <!-- RAID-SKIP (dynamisk) -->
             <g id="raid-ships"></g>
-            <!-- TOOLTIP -->
-            <g id="map-tooltip" style="display:none">
-              <rect id="tt-bg" x="0" y="0" width="160" height="80" fill="#0d0a06" opacity=".92" rx="3"/>
-              <text id="tt-name" x="10" y="20" font-size="12" fill="#e8b020" font-family="Cinzel,serif"></text>
-              <text id="tt-stats" x="10" y="40" font-size="10" fill="#c8b882" font-family="Crimson Text,serif"></text>
-              <text id="tt-stats2" x="10" y="56" font-size="10" fill="#c8b882" font-family="Crimson Text,serif"></text>
-              <text id="tt-action" x="10" y="72" font-size="10" fill="#8aab8a" font-family="Cinzel,serif"></text>
-            </g>
           </svg>
         </div>
         <div class="kart-rank">
@@ -1137,6 +1102,8 @@ function visSisteTick(gamleRes){
   card.innerHTML=`<div class="tick-summary-title">Tick ${S.tick} — ${gameTime(S.tick)}</div>
     <div class="tick-summary-grid">${html}</div>`;
   document.getElementById('ev-list').prepend(card);
+  // Køyr filter på nytt så kortet alltid er synleg uavhengig av aktiv sub-tab
+  filtrerHendingar();
 }
 
 // ══ RAID ══
@@ -1764,8 +1731,10 @@ function addLog(msg,cls='info'){
 }
 
 // ══ HEX-KART ══
-const HEX_ORIGO={x:480,y:270};
-const HEX_SIZE=58;
+// Hex-origo kalibrert mot kart.png
+// Bergen (Noreg) ligg på ca (573, 257) i 960x540
+const HEX_ORIGO={x:573,y:265};
+const HEX_SIZE=48;
 
 function hexTilPx(hx,hy){
   const px=HEX_ORIGO.x+HEX_SIZE*(hx*1.732);
@@ -1778,6 +1747,7 @@ function hexPath(cx,cy,r){
 }
 function hexAvstand(x1,y1,x2,y2){const dx=x2-x1,dy=y2-y1;return Math.max(Math.abs(dx),Math.abs(dy),Math.abs(dx+dy));}
 function raidTicks(fra,til){
+  if(!fra||!til)return 2;
   const d=hexAvstand(fra.hex_x||0,fra.hex_y||0,til.hex_x||0,til.hex_y||0);
   return Math.min(4,Math.max(2,Math.round(d*0.8+1.5)));
 }
