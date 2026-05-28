@@ -1879,10 +1879,37 @@ function updKartDots(){
     const gruppeData=encodeURIComponent(JSON.stringify(gruppe.map(jj=>({id:jj.id,name:jj.name,warriors:jj.warriors,honour:jj.honour}))));
     html+=`<g style="cursor:pointer" onclick="visGruppeModal(decodeURIComponent('${gruppeData}'))"><circle cx="${pos.x}" cy="${pos.y}" r="${r+5}" fill="${col}" opacity=".2"/><circle cx="${pos.x}" cy="${pos.y}" r="${r}" fill="${col}" stroke="#0d0a06" stroke-width="2"/><text x="${pos.x}" y="${pos.y+4}" text-anchor="middle" font-size="${gruppe.length>1?11:9}" fill="#fff" font-family="sans-serif">${gruppe.length>1?gruppe.length:'👤'}</text><text x="${pos.x}" y="${pos.y-18}" text-anchor="middle" font-size="9" fill="#c8b882" font-family="Cinzel,serif">${nk}</text><text x="${pos.x}" y="${pos.y+22}" text-anchor="middle" font-size="8" fill="rgba(200,180,100,.7)" font-family="Cinzel,serif">${avstand}t</text></g>`;
   });
-  // Eigen jarl
-  const mid=encodeURIComponent(MIN_JARL?.id||'');const mn=encodeURIComponent(MIN_JARL?.jarlnamn||'');
+  // Eigen jarl — sjekk om nokon andre er på same plass
   const myKp=finnKartposPx(MIN_JARL?.hex_x||0,MIN_JARL?.hex_y||0);
-  html+=`<g style="cursor:pointer" onclick="visJarlKartModal(decodeURIComponent('${mid}'),decodeURIComponent('${mn}'),${S.r.warriors},${S.r.honour},true)"><circle cx="${minPos.x}" cy="${minPos.y}" r="20" fill="#e8b020" opacity=".2"/><circle cx="${minPos.x}" cy="${minPos.y}" r="13" fill="#e8b020" stroke="#0d0a06" stroke-width="2.5"/><text x="${minPos.x}" y="${minPos.y+5}" text-anchor="middle" font-size="13" fill="#0d0a06" font-family="sans-serif">🦅</text><text x="${minPos.x}" y="${minPos.y-22}" text-anchor="middle" font-size="10" fill="#e8b020" font-family="Cinzel,serif" font-weight="600">${MIN_JARL?.jarlnamn||''}</text><text x="${minPos.x}" y="${minPos.y+26}" text-anchor="middle" font-size="8" fill="rgba(232,176,32,.8)" font-family="Cinzel,serif">${myKp.namn}</text></g>`;
+  const naboPåSamePlass=S.jarls.filter(j=>{
+    const p2=jarlPos(j);
+    return Math.sqrt(Math.pow(minPos.x-p2.x,2)+Math.pow(minPos.y-p2.y,2))<30;
+  });
+
+  if(naboPåSamePlass.length>0){
+    // Fleire på same stad — lag gruppe med eigen jarl inkludert
+    const gruppe=[
+      {id:MIN_JARL?.id,name:MIN_JARL?.jarlnamn||'',warriors:S.r.warriors,honour:S.r.honour,erMeg:true},
+      ...naboPåSamePlass.map(j=>({id:j.id,name:j.name,warriors:j.warriors,honour:j.honour}))
+    ];
+    const gruppeData=encodeURIComponent(JSON.stringify(gruppe));
+    html+=`<g style="cursor:pointer" onclick="visGruppeModal(decodeURIComponent('${gruppeData}'))">
+      <circle cx="${minPos.x}" cy="${minPos.y}" r="22" fill="#c8900a" opacity=".2"/>
+      <circle cx="${minPos.x}" cy="${minPos.y}" r="14" fill="#e8b020" stroke="#0d0a06" stroke-width="2.5"/>
+      <text x="${minPos.x}" y="${minPos.y+5}" text-anchor="middle" font-size="12" fill="#0d0a06" font-family="sans-serif">${gruppe.length}</text>
+      <text x="${minPos.x}" y="${minPos.y-22}" text-anchor="middle" font-size="9" fill="#e8b020" font-family="Cinzel,serif" font-weight="600">${myKp.namn}</text>
+    </g>`;
+  } else {
+    // Berre eigen jarl
+    const mid=encodeURIComponent(MIN_JARL?.id||'');const mn=encodeURIComponent(MIN_JARL?.jarlnamn||'');
+    html+=`<g style="cursor:pointer" onclick="visJarlKartModal(decodeURIComponent('${mid}'),decodeURIComponent('${mn}'),${S.r.warriors},${S.r.honour},true)">
+      <circle cx="${minPos.x}" cy="${minPos.y}" r="20" fill="#e8b020" opacity=".2"/>
+      <circle cx="${minPos.x}" cy="${minPos.y}" r="13" fill="#e8b020" stroke="#0d0a06" stroke-width="2.5"/>
+      <text x="${minPos.x}" y="${minPos.y+5}" text-anchor="middle" font-size="13" fill="#0d0a06" font-family="sans-serif">🦅</text>
+      <text x="${minPos.x}" y="${minPos.y-22}" text-anchor="middle" font-size="10" fill="#e8b020" font-family="Cinzel,serif" font-weight="600">${MIN_JARL?.jarlnamn||''}</text>
+      <text x="${minPos.x}" y="${minPos.y+26}" text-anchor="middle" font-size="8" fill="rgba(232,176,32,.8)" font-family="Cinzel,serif">${myKp.namn}</text>
+    </g>`;
+  }
   svg.innerHTML=html;
 }
 
