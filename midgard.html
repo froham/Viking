@@ -390,17 +390,47 @@ body{background:#0d0a06;color:var(--ink);font-family:'Crimson Text',Georgia,seri
               <rect x="368" y="238" width="28" height="72" fill="#5a3a08"/>
               <rect x="292" y="232" width="24" height="20" fill="#c8a040" opacity=".6"/>
               <rect x="436" y="232" width="24" height="20" fill="#c8a040" opacity=".6"/>
-              <circle cx="376" cy="172" r="8" fill="#909090" opacity=".5"/>
-              <circle cx="372" cy="156" r="6" fill="#909090" opacity=".35"/>
-              <circle cx="378" cy="143" r="5" fill="#909090" opacity=".2"/>
+              <g id="big-røyk"></g>
               <text x="380" y="278" text-anchor="middle" font-size="14" fill="#f2e8d0" font-family="Cinzel,serif" letter-spacing="2">LANGHUS</text>
+              <!-- Nivå 2: ekstra vindauge -->
+              <g id="big-longhus-ext" style="display:none">
+                <rect x="316" y="232" width="16" height="14" fill="#c8a040" opacity=".7" rx="1"/>
+                <rect x="460" y="232" width="16" height="14" fill="#c8a040" opacity=".7" rx="1"/>
+                <rect x="316" y="255" width="16" height="14" fill="#c8a040" opacity=".5" rx="1"/>
+                <rect x="460" y="255" width="16" height="14" fill="#c8a040" opacity=".5" rx="1"/>
+              </g>
+              <!-- Nivå 3: flagg og utbygging -->
+              <g id="big-longhus-flagg3" style="display:none">
+                <line x1="380" y1="182" x2="380" y2="148" stroke="#3a2008" stroke-width="3"/>
+                <polygon points="380,148 418,160 380,172" fill="#8b1a1a"/>
+                <rect x="240" y="248" width="40" height="62" fill="#7a6010" rx="2"/>
+                <polygon points="236,248 284,248 278,230 242,230" fill="#6a5008"/>
+                <rect x="500" y="248" width="40" height="62" fill="#7a6010" rx="2"/>
+                <polygon points="496,248 544,248 538,230 502,230" fill="#6a5008"/>
+              </g>
             </g>
             <!-- MEAD HALL -->
             <g id="big-mead_hall" style="opacity:.1;transition:opacity .7s">
               <rect x="520" y="216" width="160" height="94" fill="#7a3a1a" rx="3"/>
               <polygon points="508,216 692,216 676,178 522,178" fill="#5a2a0a"/>
               <rect x="588" y="238" width="24" height="72" fill="#4a1a08"/>
+              <rect x="530" y="232" width="20" height="16" fill="#c8a040" opacity=".6" rx="1"/>
+              <rect x="650" y="232" width="20" height="16" fill="#c8a040" opacity=".6" rx="1"/>
               <text x="600" y="278" text-anchor="middle" font-size="12" fill="#f2e8d0" font-family="Cinzel,serif" letter-spacing="1">MEAD HALL</text>
+              <!-- Nivå 2: banner -->
+              <g id="big-mead-banner" style="display:none">
+                <line x1="522" y1="178" x2="522" y2="148" stroke="#5a2a0a" stroke-width="2"/>
+                <polygon points="522,148 554,158 522,168" fill="#c8900a"/>
+                <line x1="678" y1="178" x2="678" y2="148" stroke="#5a2a0a" stroke-width="2"/>
+                <polygon points="678,148 646,158 678,168" fill="#c8900a"/>
+              </g>
+              <!-- Nivå 3: sidetårn -->
+              <g id="big-mead-tårn" style="display:none">
+                <rect x="492" y="190" width="30" height="120" fill="#6a3010" rx="2"/>
+                <rect x="487" y="184" width="40" height="12" fill="#5a2808" rx="1"/>
+                <rect x="668" y="190" width="30" height="120" fill="#6a3010" rx="2"/>
+                <rect x="663" y="184" width="40" height="12" fill="#5a2808" rx="1"/>
+              </g>
             </g>
             <!-- NAUST -->
             <g id="big-naust" style="opacity:.1;transition:opacity .7s">
@@ -414,6 +444,9 @@ body{background:#0d0a06;color:var(--ink);font-family:'Crimson Text',Georgia,seri
               <rect x="10" y="168" width="76" height="20" fill="#5a5040" rx="2"/>
               <rect x="18" y="152" width="18" height="20" fill="#5a5040"/>
               <rect x="50" y="152" width="18" height="20" fill="#5a5040"/>
+              <!-- Nivå 2: vakteld -->
+              <circle cx="48" cy="145" r="5" fill="#c05010" opacity=".85" id="big-tower-flagg"/>
+              <circle cx="48" cy="145" r="8" fill="#e07020" opacity=".3" id="big-tower-detalj"/>
               <text x="48" y="288" text-anchor="middle" font-size="11" fill="#f2e8d0" font-family="Cinzel,serif">VAKTTÅRN</text>
             </g>
             <!-- SMIE -->
@@ -706,6 +739,7 @@ async function startSpel(){
   document.getElementById('auth-screen').style.display='none';
   document.getElementById('app').style.display='flex';
   document.getElementById('hdr-jarlnamn').textContent=MIN_JARL.jarlnamn;
+  setTimeout(()=>{const t=beregnTittel(STATS);if(t){const el=document.getElementById('hdr-jarlnamn');if(el)el.textContent=`${MIN_JARL.jarlnamn} ${t}`;}},500);
   await hentAlt();
   await lastJarlarInnICache();
   sjekkDevTilgang();
@@ -1016,6 +1050,24 @@ async function globalTick(){
       tk('🌙 Nattvindu aktiv — raid utsett til 08:01',3000);
     }
 
+    // ── VÊRHENDINGAR ──
+    const vær=tilfeldigVær();
+    if(vær){
+      await sb.from('verdsstat').upsert({id:1,tick:nyTick,ragnarok:Math.round(nyRagna+vær.ragnarokDelta),sist_tick:new Date().toISOString()},{onConflict:'id'});
+      S.ragnarok=Math.min(100,nyRagna+vær.ragnarokDelta);
+      // Oppdater ressursar med vêreffekt for eigen jarl
+      if(vær.resKey&&vær.resMult!==1){
+        const påverka=Math.round((S.r[vær.resKey]||0)*vær.resMult)-(S.r[vær.resKey]||0);
+        if(påverka!==0)chg(vær.resKey,påverka);
+      }
+      if(vær.bonus){Object.entries(vær.bonus).forEach(([k,v])=>chg(k,v));}
+      addEvCard({type:vær.type,icon:vær.ikon,title:vær.tittel,
+        desc:vær.beskriving,
+        choices:[{label:'Forstått',fn:()=>{}}]
+      });
+      devLog(`Vêrhending: ${vær.tittel}`,'info');
+    }
+
     // Sjekk raid som ankjem neste tick
     const{data:kommandeRaid}=await sb.from('raid').select('*').eq('løyst',false).eq('forsvarer_id',MIN_JARL?.id);
     for(const r of(kommandeRaid||[])){
@@ -1190,6 +1242,7 @@ async function sendRaid(jarlId,warriors){
   S.raidInFlight={target:jarlId,targetName:j.name,warriors,arriveTick:S.tick+2};
   await sb.from('raid').insert({angriper_id:MIN_JARL.id,forsvarer_id:jarlId,krigere_sendt:warriors,avreise_tick:S.tick,ankomst_tick:S.tick+2});
   addLog(`[RAID] Sendt mot ${j.name}: ${warriors} krigerar. Ankjem tick ${S.tick+2}.`,'info');
+  inkStats('raidCount');
   tk(`Raid sendt! ${warriors} menn mot ${j.name}.`);
   updKartRaidShip(true);
   lagreRessursar();updAll();closeModal();
@@ -1267,6 +1320,63 @@ async function utforReset(nyTideverv=1){
   }catch(err){console.error(err);tk('Feil: '+err.message);}
 }
 function romartall(n){return['I','II','III','IV','V','VI','VII','VIII','IX','X'][(n-1)%10]||String(n);}
+
+// ══ TITLAR OG RYKTE ══
+const TITLAR={
+  // Basert på krigsåtferd
+  krigar:[
+    {min:10,tittel:'Blodøks',prefix:'den Fryktelege'},
+    {min:5, tittel:'Stridshøg',prefix:'den Djerve'},
+    {min:2, tittel:'Krigar',prefix:'den Modige'},
+  ],
+  fredleg:[
+    {min:0,tittel:'den Fredelege',prefix:'den Fredelege'},
+  ],
+  handlar:[
+    {min:15,tittel:'den Rike',prefix:'den Rike'},
+    {min:8, tittel:'Kjøpferd',prefix:'Kjøpmannen'},
+    {min:3, tittel:'Handelsmann',prefix:'den Handlekraftige'},
+  ],
+  byggar:[
+    {min:5,tittel:'Storbyggjar',prefix:'den Vise'},
+    {min:3,tittel:'Byggjar',prefix:'den Dugelege'},
+  ],
+  ære:[
+    {min:50,tittel:'Gudanes Gunst',prefix:'den Ærerike'},
+    {min:30,tittel:'Æresvakt',prefix:'den Ærverdige'},
+    {min:15,tittel:'Hirdmann',prefix:'den Ærefulle'},
+  ],
+};
+
+function beregnTittel(r){
+  // Bestem dominant åtferd
+  const raidAnt=r.raidCount||0;
+  const handelAnt=r.handelCount||0;
+  const bygAnt=Object.values(S.buildings).filter(Boolean).length;
+
+  if(S.r.honour>=50){return'den Ærerike';}
+  if(S.r.honour>=30){return'den Ærverdige';}
+  if(raidAnt>=10){return'Blodøks';}
+  if(raidAnt>=5){return'den Djerve';}
+  if(handelAnt>=15){return'den Rike';}
+  if(handelAnt>=8){return'Kjøpmannen';}
+  if(bygAnt>=5){return'den Vise';}
+  if(raidAnt===0&&S.tick>10){return'den Fredelege';}
+  if(S.r.warriors>=15){return'den Mektige';}
+  if(S.r.skald>=3){return'Skaldenes Ven';}
+  return'';
+}
+
+// Statistikkteljarar (lokal sesjon)
+const STATS={raidCount:0,handelCount:0,forsvarCount:0};
+
+function inkStats(type){
+  STATS[type]=(STATS[type]||0)+1;
+  // Oppdater tittel i header
+  const tittel=beregnTittel(STATS);
+  const el=document.getElementById('hdr-jarlnamn');
+  if(el&&tittel)el.textContent=`${MIN_JARL?.jarlnamn||''} ${tittel}`;
+}
 
 // ══ HJELP ══
 let lagreTimer=null;
@@ -1533,7 +1643,7 @@ function doTrade(id){
   const t=TRADES.find(x=>x.id===id);if(!t)return;
   if((S.r[t.sell]||0)<t.sellAmt){tk(`Treng ${t.sellAmt} ${t.sell}`);return;}
   S.r[t.sell]-=t.sellAmt;S.r[t.buy]=(S.r[t.buy]||0)+t.buyAmt;
-  tk(`+${t.buyAmt} ${t.buy}`);lagreRessursar();updAll();
+  tk(`+${t.buyAmt} ${t.buy}`);lagreRessursar();updAll();inkStats('handelCount');
 }
 
 // ══ HENDINGAR ══
@@ -1831,6 +1941,55 @@ document.addEventListener('input',e=>{
   }
 });
 
+// ══ VÊRHENDINGAR ══
+const VÆR_POOL=[
+  {id:'storm',ikon:'⛈',type:'urgent',tittel:'Storm over Midgard',
+   beskriving:'Kraftig uvêr feiar inn frå havet. Alle skip er forsinka — raid tek éin tick ekstra.',
+   resKey:null,resMult:1,ragnarokDelta:1,
+   raidForsinking:1,sannsynlegheit:0.06},
+  {id:'tørke',ikon:'☀️',type:'urgent',tittel:'Tørke i landet',
+   beskriving:'Sommaren er tørr og hard. Bøndene slit — matproduksjonen er halvert denne ticken.',
+   resKey:'food',resMult:0.5,ragnarokDelta:2,
+   raidForsinking:0,sannsynlegheit:0.05},
+  {id:'haustvind',ikon:'🍂',type:'trade',tittel:'Rik haustvind',
+   beskriving:'Ein sjeldan god vind ber frø og frukter over landet. Tømmerproduksjonen er dobla denne ticken.',
+   resKey:'timber',resMult:2,ragnarokDelta:-1,
+   raidForsinking:0,sannsynlegheit:0.07},
+  {id:'nordlys',ikon:'🌌',type:'divine',tittel:'Nordlys over Midgard',
+   beskriving:'Gudane dansar på himmelen. Skaldene syng heile natta — alle jarlar får +2 ære.',
+   resKey:'honour',resMult:1,ragnarokDelta:0,
+   raidForsinking:0,sannsynlegheit:0.06,bonus:{honour:2}},
+  {id:'isflaum',ikon:'🧊',type:'urgent',tittel:'Isflaum frå nord',
+   beskriving:'Jotunane sender is og kulde. Mjødproduksjon stoppar opp — mjød tapar 3 denne ticken.',
+   resKey:'mead',resMult:1,ragnarokDelta:3,
+   raidForsinking:0,sannsynlegheit:0.05,bonus:{mead:-3}},
+  {id:'godvær',ikon:'🌤',type:'trade',tittel:'Godt seglvêr',
+   beskriving:'Vinden er perfekt for sjøfart. Handelsskip kjem frå alle kantar — sølvproduksjonen er auka.',
+   resKey:'silver',resMult:1.5,ragnarokDelta:-1,
+   raidForsinking:0,sannsynlegheit:0.07},
+  {id:'pestilens',ikon:'💀',type:'urgent',tittel:'Sjukdom spreiast',
+   beskriving:'Ein mystisk sjukdom herjar i jarldøma. Befolkninga er svekka — krigarar dreg ned.',
+   resKey:'warriors',resMult:0.9,ragnarokDelta:2,
+   raidForsinking:0,sannsynlegheit:0.04},
+  {id:'odinsteikn',ikon:'🦅',type:'divine',tittel:'Odins teikn',
+   beskriving:'Ravnane Hugin og Munin sirkulerer over alle jarldøme. Gudane ser alt — hamingja stig.',
+   resKey:'hamingja',resMult:1,ragnarokDelta:-2,
+   raidForsinking:0,sannsynlegheit:0.05,bonus:{hamingja:5}},
+];
+let sisteVær=null;
+
+function tilfeldigVær(){
+  // Maks éi vêrhending per 4 ticks
+  if(sisteVær&&S.tick-sisteVær<4)return null;
+  for(const v of VÆR_POOL){
+    if(Math.random()<v.sannsynlegheit){
+      sisteVær=S.tick;
+      return v;
+    }
+  }
+  return null;
+}
+
 // ══ SKJALD ══
 function rykteOmJarl(){
   // Hardkoda rykte-mal basert på nærbuande jarlar
@@ -1846,15 +2005,49 @@ function rykteOmJarl(){
   return malar[Math.floor(Math.random()*malar.length)];
 }
 
-const SKJALD=[
-  ()=>S.r.honour>25?'Ditt namn syng frå sør til nord. Sjølv Odin lener seg fram.':S.r.honour<8?'Æren falmar. Menn ser vekk.':'Ærens vekt berast av dei som handlar.',
-  ()=>S.r.mead<4?'Mjødkaret er tomt — krigarane murrar.':S.r.mead>20?'Mead-hallen summer av song.':'Mjøden flyt, troppane er nøgde.',
-  ()=>S.ragnarok>60?'Jotunane samlar seg. Ragnarok nærmar seg!':S.ragnarok>35?'Gudane er uroleg stille.':'Verdenen er i balanse.',
-  ()=>S.raidInFlight?`${S.raidInFlight.warriors} krigerar på havet mot ${S.raidInFlight.targetName}.`:S.r.warriors>12?'Ein mektig hær samlar seg.':'Rekrutter fleire krigarar.',
-  ()=>rykteOmJarl()||`${S.r.bonder} bønder dyrkar jorda. ${S.r.skald} skalder syng om deg.`,
-  ()=>isNight(S.tick)?'🌙 Natten er gudanes tid — ingen angrip i mørket.':'Dagen gryr. Kva vil du byggje?',
-  ()=>{const r=rykteOmJarl();return r||'Midgard er stille. Førebels.';},
-];
+function genSkjaldTekst(){
+  const er_morgen=S.tick%6===0;
+  const er_kveld=S.tick%6===4;
+  const er_natt=isNight(S.tick);
+
+  // Morgonrapport — spesiell
+  if(er_morgen){
+    const dag=Math.floor(S.tick/6)+1;
+    const delar=[];
+    if(S.raidInFlight)delar.push(`Mennene dine er framleis på havet.`);
+    if(S.r.mead<5)delar.push(`Mjødkaret er nesten tomt.`);
+    if(S.ragnarok>60)delar.push(`Jotunane er urolige i nord.`);
+    const rykte=rykteOmJarl();
+    if(rykte)delar.push(rykte);
+    if(!delar.length)delar.push(`Eit nytt hærdag gryr over jarldømet ditt.`);
+    return`Dag ${dag} — ${delar.join(' ')}`;
+  }
+
+  // Kveldsrapport
+  if(er_kveld){
+    const v=S.r;
+    if(v.silver>100)return`Sølvlageret flyt over. Tid for å investere eller raide.`;
+    if(v.mead<3)return`Krigarane klagar over det tomme mjødkaret. Handle no.`;
+    if(v.honour>40)return`Æren din er kjend i alle jarldøme. Odins auge kviler på deg.`;
+    return`Kvelden kjem. Set vaktposten og kvil.`;
+  }
+
+  // Natt
+  if(er_natt)return`🌙 Natten tilhøyrer gudane. Ingen tør angripe i mørket.`;
+
+  // Vanleg tekst — roter
+  const lister=[
+    ()=>S.r.honour>25?'Ditt namn syng frå sør til nord.':S.r.honour<8?'Æren falmar. Handle no.':'Ærens vekt berast av dei som tør.',
+    ()=>S.r.mead<4?'Mjødkaret er tomt — krigarane murrar.':S.r.mead>20?'Mead-hallen summer av song.':'Mjøden flyt, troppane er nøgde.',
+    ()=>S.ragnarok>60?'Jotunane samlar seg. Ragnarok nærmar seg!':S.ragnarok>35?'Gudane kviskrar urolege ord.':'Verdenen er i balanse.',
+    ()=>S.raidInFlight?`${S.raidInFlight.warriors} krigerar på havet mot ${S.raidInFlight.targetName}.`:S.r.warriors>12?'Ein mektig hær samlar seg.':'Rekrutter fleire krigarar.',
+    ()=>rykteOmJarl()||`${S.r.bonder} bønder dyrkar jorda. ${S.r.skald} skalder syng om deg.`,
+    ()=>{const t=beregnTittel(STATS);return t?`Folket kallar deg ${MIN_JARL?.jarlnamn} ${t}.`:'Kva will du byggje av dette landet?';},
+  ];
+  return lister[S.tick%lister.length]();
+}
+
+const SKJALD=[genSkjaldTekst];
 
 // ══ OPPDATERING ══
 function updHeader(){
@@ -1957,19 +2150,75 @@ function updByInfo(){
 }
 
 function updCityBig(){
+  // Oppdater kvar bygning basert på nivå
+  const bldgSVG={
+    longhus:{
+      0:'opacity:.1',
+      1:'opacity:1',
+      2:'opacity:1', // legg til detaljar via class
+      3:'opacity:1',
+    }
+  };
+
   ['longhus','mead_hall','naust','tower','forge','ship'].forEach(id=>{
     const el=document.getElementById('big-'+id);
-    if(el)el.style.opacity=S.buildings[id]?'1':'0.1';
+    if(!el)return;
+    const niv=getAktivtNivå(id);
+    el.style.opacity=niv>0?'1':'0.1';
+    // Nivå 2+: legg til flagg og detaljar dynamisk
+    const flaggEl=document.getElementById('big-'+id+'-flagg');
+    if(flaggEl)flaggEl.style.display=niv>=2?'':'none';
+    const detaljEl=document.getElementById('big-'+id+'-detalj');
+    if(detaljEl)detaljEl.style.display=niv>=3?'':'none';
   });
+
+  // Oppdater SVG-elementer basert på nivå
+  const longhusNivå=getAktivtNivå('longhus');
+  const meadNivå=getAktivtNivå('mead_hall');
+  const towerNivå=getAktivtNivå('tower');
+
+  // Langhus: nivå 2 får ekstra vindauge, nivå 3 får flagg og utbygging
+  const lhExt=document.getElementById('big-longhus-ext');
+  if(lhExt)lhExt.style.display=longhusNivå>=2?'':'none';
+  const lhFlagg=document.getElementById('big-longhus-flagg3');
+  if(lhFlagg)lhFlagg.style.display=longhusNivå>=3?'':'none';
+
+  // Mead Hall: nivå 2 får banner, nivå 3 får tårn
+  const mhBanner=document.getElementById('big-mead-banner');
+  if(mhBanner)mhBanner.style.display=meadNivå>=2?'':'none';
+  const mhTårn=document.getElementById('big-mead-tårn');
+  if(mhTårn)mhTårn.style.display=meadNivå>=3?'':'none';
+
+  // Folk-lag — fleire folk ved høgare befolkning og bygningar
   const layer=document.getElementById('big-people');
   layer.innerHTML='';
-  const count=Math.min(12,S.r.warriors);
-  const basePositions=[[380,310],[360,320],[400,320],[345,305],[415,305],[330,315],[430,315],[350,298],[410,298],[375,295],[360,308],[395,308]];
+  const count=Math.min(16, S.r.warriors + Math.floor(S.r.bonder/2));
+  const basePos=[[380,310],[360,320],[400,320],[345,305],[415,305],[330,315],[430,315],
+    [350,298],[410,298],[375,295],[360,308],[395,308],[340,290],[420,290],[365,285],[395,285]];
+
   for(let i=0;i<count;i++){
-    const[x,y]=basePositions[i]||[360+i*10,315];
-    layer.innerHTML+=`<ellipse cx="${x}" cy="${y+14}" rx="5" ry="2" fill="#2a2010" opacity=".3"/>
-      <circle cx="${x}" cy="${y}" r="5" fill="#c8a070"/>
-      <line x1="${x}" y1="${y+5}" x2="${x}" y2="${y+14}" stroke="#6a4020" stroke-width="3"/>`;
+    const[x,y]=basePos[i]||[360+i*8,310];
+    const erKrigar=i<S.r.warriors;
+    const farge=erKrigar?'#c8a070':'#b8987a';
+    const hjelm=erKrigar?`<ellipse cx="${x}" cy="${y-5}" rx="5" ry="3" fill="#7a7060" opacity=".9"/>`:'' ;
+    layer.innerHTML+=`
+      <ellipse cx="${x}" cy="${y+14}" rx="${erKrigar?6:4}" ry="2" fill="#2a2010" opacity=".25"/>
+      <circle cx="${x}" cy="${y}" r="${erKrigar?5:4}" fill="${farge}"/>
+      ${hjelm}
+      <line x1="${x}" y1="${y+5}" x2="${x}" y2="${y+14}" stroke="#6a4020" stroke-width="${erKrigar?3:2}"/>
+      ${erKrigar?`<line x1="${x+4}" y1="${y+2}" x2="${x+10}" y2="${y-4}" stroke="#8a7a60" stroke-width="1.5"/>`:''}`;
+  }
+
+  // Røyk frå langhus avhengig av nivå
+  const røykLag=document.getElementById('big-røyk');
+  if(røykLag){
+    const røykAnt=Math.min(3,longhusNivå);
+    let røykHtml='';
+    for(let i=0;i<røykAnt;i++){
+      const x=376+i*12;
+      røykHtml+=`<circle cx="${x}" cy="${170-i*8}" r="${4+i*2}" fill="#909090" opacity="${0.4-i*0.08}"/>`;
+    }
+    røykLag.innerHTML=røykHtml;
   }
 }
 
@@ -1999,7 +2248,7 @@ document.getElementById('modal-bg').onclick=e=>{if(e.target===document.getElemen
 // ══ SAMLA UPDATE ══
 function updAll(){
   updHeader();updByggList();updInnList();updHandelList();updRagna();updRankGrid();
-  const _ss=document.getElementById('skjald-speech');if(_ss)_ss.textContent=SKJALD[S.tick%SKJALD.length]?.()??'';
+  const _ss=document.getElementById('skjald-speech');if(_ss)_ss.textContent=genSkjaldTekst()??'';
 }
 
 // ══ INIT ══
